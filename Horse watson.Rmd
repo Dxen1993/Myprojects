@@ -1,0 +1,227 @@
+---
+title: "HORSE WATSON"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Libraries
+```{r, echo=FALSE}
+rm(list = ls())
+library(readxl)
+library(dplyr)
+library(MASS)
+library(caret)
+library(Metrics)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(e1071)
+library(Matrix)
+library(glmnet)
+```
+
+### Read dataset
+```{r, echo=FALSE}
+
+horsedata1 <- read_excel("Horse.xlsx")
+horsedata1 <- horsedata1[,c(1:21,32:34,59,60)]
+```
+
+
+
+### Dataset for analysis
+```{r, echo=FALSE}
+
+horsedata1$HorseName <- as.factor(horsedata1$HorseName)
+horsedata1$HorseName <- as.numeric(horsedata1$HorseName)
+horsedata1$Jockey <- as.factor(horsedata1$Jockey)
+horsedata1$Jockey <- as.numeric(horsedata1$Jockey)
+horsedata1$Trainner <- as.factor(horsedata1$Trainner)
+horsedata1$Trainner <- as.numeric(horsedata1$Trainner)
+horsedata1$Class <- as.factor(horsedata1$Class)
+horsedata1$Class <- as.numeric(horsedata1$Class)
+horsedata1$Class <- as.factor(horsedata1$Class)
+horsedata1$Going <- as.factor(horsedata1$Going)
+horsedata1$Going <- as.numeric(horsedata1$Going)
+horsedata1$Going <- as.factor(horsedata1$Going)
+horsedata1$Title <- as.factor(horsedata1$Title)
+horsedata1$Title <- as.numeric(horsedata1$Title)
+horsedata1$Course <- as.factor(horsedata1$Course)
+horsedata1$Course <- as.numeric(horsedata1$Course)
+horsedata1$Pedigree <- as.factor(horsedata1$Pedigree)
+horsedata1$Pedigree <- as.numeric(horsedata1$Pedigree)
+horsedata1$RacingStyle <- as.factor(horsedata1$RacingStyle)
+horsedata1$RacingStyle <- as.numeric(horsedata1$RacingStyle)
+horsedata1$StartingPrice <- as.numeric(as.character(horsedata1$StartingPrice))
+horsedata1$WinningPosition <- as.numeric(as.character(horsedata1$WinningPosition))
+horsedata1$Type <- as.factor(horsedata1$Type)
+horsedata1$Grade <- as.factor(horsedata1$Grade)
+horsedata1$`Rating and Age Band` <- as.factor(horsedata1$`Rating and Age Band`)
+horsedata1$`Rating and Age Band` <- as.numeric(horsedata1$`Rating and Age Band`)
+horsedata1 <- na.omit(horsedata1)
+head(horsedata1)
+```
+
+### Constructing variables
+```{r, echo=FALSE}
+for (i in 1:nrow(horsedata1)) {
+  if(horsedata1$Grade[i] != 0 ){
+    horsedata1$Grade[i] <- 1
+  }
+}
+horsedata1$Grade <- as.numeric(horsedata1$Grade)
+horsedata1$Grade <- as.factor(horsedata1$Grade)
+
+for (i in 1:nrow(horsedata1)) {
+  if(horsedata1$Type[i] == "Bumper"){
+    horsedata1$Type[i] <- "Hunt"
+  }
+}
+
+
+horsedata1$Type <- as.numeric(horsedata1$Type)
+horsedata1$Type <- as.factor(horsedata1$Type)
+
+for (i in 1:nrow(horsedata1)) {
+  if(horsedata1$Group[i] != 0){
+    horsedata1$Group[i] <- 1
+  }
+}
+
+
+horsedata1$Group <- as.numeric(horsedata1$Group)
+horsedata1$Group <- as.factor(horsedata1$Group)
+
+for (i in 1:nrow(horsedata1)) {
+  if(horsedata1$Age[i] >= 13){
+    horsedata1$Age[i] <- 12
+  }
+}
+
+horsedata1$Age <- as.factor(horsedata1$Age)
+
+summary(horsedata1)
+```
+
+
+### Linear regression
+```{r, echo=FALSE}
+model1 <- lm(StartingPrice~  Jockey + Trainner + Going + TopSpeed + Weight + HorseName + WinningPosition + 
+               PrizeMoney, data = horsedata1)
+backstep1 <- stepAIC(model1)
+backf1 <- formula(backstep1)
+
+model2 <- lm(formula = backf1, data = horsedata1)
+
+## Outiers 
+
+distances = data.frame(distance=cooks.distance(model2))
+#ggplot(distances, aes(x=1:nrow(distances), y=distances$distance)) + geom_point(shape=1) +
+#  labs(x="Index", y="Cooks Distance")
+
+# number of regressors in the model
+k <- 6
+n <- nrow(horsedata1)
+cutoff.cook <- k/(n-k-1)
+inflpoints <- cooks.distance(model2)[cooks.distance(model2) > cutoff.cook] 
+length(inflpoints)
+
+indexinfpoints <- as.numeric(names(inflpoints))
+
+# Remove outliers
+data.noOutliers <- horsedata1[-indexinfpoints,]
+
+set.seed(1234)
+ind <- sample(2, nrow(data.noOutliers), replace = T, prob = c(0.8, 0.2))
+
+trainhorse <- data.noOutliers[ind == 1,]
+testhorse <- data.noOutliers[ind == 2,]
+
+# Refit the model without outliers
+model3 <- lm(formula = backf1, data = trainhorse)
+
+summary(model3) 
+
+prlm <- predict(model3, testhorse)
+compare <- cbind (actual=testhorse$StartingPrice, prlm)
+mean (apply(compare, 1, min)/apply(compare, 1, max))
+```
+
+### RIDGE
+```{r, echo=FALSE}
+set.seed(1234)
+custom <- trainControl(method = "repeatedcv", number = 5, repeats = 5, verboseIter = T)
+ridgeRegModel <- train(StartingPrice ~ ., 
+                       method = "glmnet", 
+                          data = trainhorse,
+                          tuneGrid = expand.grid(alpha = 0, lambda = seq(0.0001,1,5)),
+                          trainControl = custom)
+Pred.ridge <- predict(ridgeRegModel, testhorse)
+ # Defining the predicted y
+compare <- cbind (actual=testhorse$StartingPrice, Pred.ridge)
+mean (apply(compare, 1, min)/apply(compare, 1, max))
+```
+
+### LASSO
+```{r, echo=FALSE}
+library(lars)
+set.seed(1234)
+custom <- trainControl(method = "repeatedcv", number = 5, repeats = 5, verboseIter = T) 
+lassoRegModel <- train(StartingPrice~., method = "glmnet", 
+                          data = trainhorse,
+            tuneGrid = expand.grid(alpha = 1, lambda = seq(0.0001,1,5)),
+            trainControl = custom)
+
+Pred.lasso <- predict(lassoRegModel, testhorse)
+compare <- cbind (actual=testhorse$StartingPrice, Pred.lasso)
+mean (apply(compare, 1, min)/apply(compare, 1, max))
+```
+
+###Regression tree
+```{r, echo=FALSE}
+set.seed(1234)
+reg.tree <- rpart(formula = backf1, data = trainhorse)
+summary(reg.tree)
+prregtree <- predict(reg.tree, testhorse) 
+compare <- cbind (actual=testhorse$StartingPrice, prregtree)
+mean (apply(compare, 1, min)/apply(compare, 1, max))
+```
+
+###NEURALNET
+```{r,echo=FALSE}
+gridnn <- createGrid("neuralnet", len = 3, data = NULL)
+m <- model.matrix(~StartingPrice + Age + Class + TopSpeed + Weight + HorseName + WinningPosition + Type, 
+                  data = trainhorse)
+
+mynn <- neuralnet(formula = backf1, data = m, hidden = 2, linear.output = TRUE)
+ 
+compare <- cbind (actual=testhorse$StartingPrice, Pred.lasso)
+mean (apply(compare, 1, min)/apply(compare, 1, max))
+
+library(caret)
+gridnn <- createGrid("nnet", data = trainhorse, len = 3)
+```
+
+### NN
+```{r, echo=FALSE}
+library(neuralnet)
+data2 <- data.noOutliers[,c("StartingPrice", "Jockey", "Trainner", "TopSpeed", "Weight", "HorseName",
+                            "WinningPosition" ,"PrizeMoney")]
+summary(data2)
+scale01 <- function(x){
+  (x - min(x)) / (max(x) - min(x))
+}
+
+data2 <- data2 %>%
+  mutate_all(scale01)
+
+# Split into test and train sets
+set.seed(12345)
+trainhorse <- sample_frac(tbl = data2, replace = FALSE, size = 0.80)
+testhorse <- anti_join(data2, trainhorse)
+
+nn1 <- neuralnet(StartingPrice~., data = trainhorse, hidden = 1, linear.output = TRUE, threshold = 0.01)
+```
