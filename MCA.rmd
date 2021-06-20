@@ -1,0 +1,129 @@
+---
+title: "HOME ASSIGNMENT 5(resit)"
+author: "Dimitris Xenos"
+date: "June 27, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Indicator Matrix
+
+```{r, warning=FALSE, echo= FALSE}
+rm(list = ls())
+
+```
+
+### Function MCA
+```{r, echo = FALSE}
+mca <- function(data, p = 2){
+  
+  #Indicator function
+    ##indicator function calculating G##
+  Indicator<-function(x){
+  vec <- unique(x) 
+  C <- length(vec)
+  mat <- matrix(0, nrow = length(x), ncol = C)
+ for (kk in 1 : C){
+    mat[x==vec[kk], kk] <- 1
+  }
+  colnames(mat) <- vec
+  return(mat)
+}
+  #Restructure the data
+  #create multiple row for each profile, so that each row has data of one newborn boy
+
+  X <- as.data.frame(do.call("rbind", apply(data, 1, function(row) t(replicate(row[1], row[-1])))))
+
+  #Number of objects and columns
+  
+  N <- nrow(X) # N = 3744
+  C <- ncol(X)
+
+    
+  #Computing G and D seperately 
+
+
+  x1<-X[,1] 
+  x2<-X[,2] 
+  x3<-X[,3]
+  
+  G1<-Indicator(x1)
+  G2<-Indicator(x2)
+  G3<-Indicator(x3)
+  
+  D1 <- t(G1)%*%G1
+  D2 <- t(G2)%*%G2
+  D3 <- t(G3)%*%G3
+  
+  #Creation of super indicator matrix
+  
+
+  G <- as.matrix(cbind(G1,G2,G3))
+  
+  #Creation of diagonal matrix
+  
+  D <- sqrt(diag(1/colSums(G)))
+
+  #Computing Gstar and then minimize it by using the singular value decomposition of
+  
+  Gstar <- G%*%D
+  svdG <- svd(Gstar)
+  
+  #Computing Kstar by ommiting the first collumn of K
+
+  Kstar <- svdG$u[,-1]
+  
+  #Computing Zstar by taking the first 2 collumns of Kstar
+
+  Zstar <- Kstar[,1:p]
+  
+  #Computing Z by multiplying Zstat with N/2
+
+  Nn <- N^(1/2)
+
+  Z <- Zstar*Nn
+
+  #Computing category quantifications
+  
+  V1 <- solve(D1)%*%t(G1)%*%Z
+  V2 <- solve(D2)%*%t(G2)%*%Z
+  V3 <- solve(D3)%*%t(G3)%*%Z
+  
+  #Computing discrimination measures
+  
+  DM1 <- diag(t(V1)%*%D1%*%V1)/N
+  DM2 <- diag(t(V2)%*%D2%*%V2)/N
+  DM3 <- diag(t(V3)%*%D3%*%V3)/N
+  DM <- rbind(DM1,DM2,DM3)
+  
+  #Computing the eigenvalues
+  
+  EV1 <- (1/p)*sum(DM[,1])
+  EV2 <- (1/p)*sum(DM[,2])
+  
+  #Computing the variance accounted for
+  
+  mEV1 <- mean(DM[1,])
+  mEV2 <- mean(DM[2,])
+  mEV3 <- mean(DM[3,])
+  
+  VAF <- mean(mEV1,mEV2,mEV3)*100
+  
+  return(list(quantifications = list(V1,V2,V3), discrimination.measures = DM,
+              eigenvalues = c(EV1,EV2), vaf_dimension = c(mEV1, mEV2, mEV3), vaf = VAF))
+}
+
+```
+
+### Applying function on dataset 
+```{r, echo=FALSE, warning=FALSE}
+library(foreign)
+
+#Reading the dataset
+boysNames2 <- read.spss("FirstnamesBGs2.sav", to.data.frame = TRUE)
+
+mca(boysNames2)
+```

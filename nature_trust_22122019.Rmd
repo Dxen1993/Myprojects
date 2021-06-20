@@ -1,0 +1,503 @@
+---
+title: "Does Nature Influence Trust?"
+author: "Dimitris Xenos & Juhuhn Kim"
+date: \today
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+library(tidyverse)
+library(foreign)
+library(mice)
+library(miceadds)
+library(mitools)
+library(UpSetR)
+```
+
+# Loading the data
+
+Given dataset in SPSS format is loaded to the R environment as an R dataframe.
+```{r load}
+# Load the data
+df <- read.spss(file = "Consulting.sav", use.value.labels=F, to.data.frame=TRUE)
+
+# Check the head of dataframe
+df[c(1:6), c(1:6)]
+```
+
+The dataframe contains 294 observations (participants to the survey) with 107 variables (items of survey questionnaire). Note that the labels and explanations are in Dutch, but it will be translated as much as possible during the whole analysis.
+
+
+# Data preprocessing
+
+## Labels of variable
+
+The primary focus of research is on variables '**nature**' and '**trust**'. The project starts with an initial data analysis on these two variables and relevant variables of them. Let us investigate the labels of those variables.
+
+```{r labels}
+# Extract labels of variables as a dataframe
+df.labels <- df %>% 
+  attr('variable.labels') %>% 
+  as.data.frame() %>% 
+  rename('Label' = '.')
+
+# Choose labels for only the variables of interest
+df.labels <- df.labels %>% 
+  rownames_to_column() %>% 
+  filter(Label != "")
+
+# Check the head of dataframe
+df.labels %>% 
+  head()
+```
+
+The independent variable '**nature**' is recorded as 'Conditie' in the dataframe, its values meaning that the participant is living in rural area(Groene hart/niet-stedelijk) if 1, urban area(Randstad/stedelijk) if 2, others(Overig) if 3 and missing if 4, and its label meaning 'Location entered by participant(Locatie ingevuld door participant)'.
+
+Related variables to the nature variable are four greenness-relevant variables: 'Natuur_ingann' with 6 responses and 'Groenheid_huislijk', 'Groenheid_gemeente' and 'Groenheid_werk' with 5 responses. Their values are in Likert scale with high values meaning much contact and possibility to interact with natural environment. Thanks to the effort from previous research, these variables are averaged per participant and stored in variable '_meangroenheid4_'.
+
+The dependent variable '**trust**' is recorded as 20 variables of 'Vertrouwen_1' to 'Vertrouwen_20' in the dataframe. Their values are in Likert scale with 5 responses. Since not all of these variables are in the same order of indication corresponding to the categorized values, some of trust variables (Vertrouwen_7, 9, 11, 13, 14) with high values mean that the participant has actually less trust (counter-indicative scales). In order to prevent problem caused by naive averaging of these variables, these counter-indicative scales are converted to the same order as the other indicative variables with high values meaning much trust. Therefore, these variables are recoded in reversed categories (Vertrouwen_7R, 9R, 11R, 13R, 14R). Likewise, these variables are averaged per participant and stored in variable '_Meantrust_'.
+
+The candidate variables for mediation effect are '**crowding**', '**identification**', '**stimulus input**' and '**social connection**' as defined in previous research. These variables are suspected to have mediation effect on how nature influences trust. This research project will investigate single mediation effect for each mediator one by one.
+
+
+## Reproducing the results of previous research (addtional mean variables)
+
+Before the research start analysis on these six variables to conduct an multiple imputation analysis, first we need to investigate if there are a few values that are out of value label range (typo in value entry). The project will start with reproducing the previous work (mean variables in addtional variables other than the raw dataset of 76 variables).
+```{r reproduce_mean}
+# Initialize a new dataset to use for analysis from original dataframe
+dataset <- df
+
+# Replace the original variables with recoded variables
+## Trust
+dataset[, c('Vertrouwen_7', 'Vertrouwen_9', 'Vertrouwen_11', 'Vertrouwen_13', 'Vertrouwen_14')] <- dataset %>%
+  select(Vertrouwen_7R, Vertrouwen_9R, Vertrouwen_11R, Vertrouwen_13R, Vertrouwen_14R)
+## Crowding
+dataset[, c('Crowding_1', 'Crowding_6')] <- dataset %>%
+  select(Crowding_1R, Crowding_6R)
+## Connection
+dataset[, c('Connection_2', 'Connection_3', 'Connection_4', 'Connection_7', 'Connection_8', 'Connection_11', 'Connection_12', 'Connection_13', 'Connection_14', 'Connection_17', 'Connection_18')] <- dataset %>%
+  select(Connection_2R, connection_3R, connection_4R, connection_7R, connection_8R, connection_11R, connection_12R, connection_13R, connection_14R, connection_17R, connection_18R)
+
+# Calculate mean of these variables
+dataset <- dataset %>% 
+  mutate(mean_nature = rowMeans(select(dataset, c(16:19)))) %>% 
+  mutate(mean_trust = rowMeans(select(dataset, c(22:41)))) %>% 
+  mutate(mean_crowding = rowMeans(select(dataset, c(42:49)))) %>%   
+  mutate(mean_identification = rowMeans(select(dataset, c(60)))) %>%   
+  mutate(mean_stimulus = rowMeans(select(dataset, c(51:55)))) %>% 
+  mutate(mean_connection = rowMeans(select(dataset, c(56:75)))) %>% 
+  mutate(mean_computer = rowMeans(select(dataset, c(5:8))))
+
+# Check with the previous work result
+new_mean <- dataset[, c(108:110, 112:113)]
+old_mean <- dataset[, c(95:99)] %>% 
+  select(meangroenheid4, Meantrust, Meancrowding, Meanstimulus, Meanconnection)
+all.equal(new_mean, old_mean)
+```
+As one can see from the `all.equal` statement, we successfully reproduced the previous work of calculation mean of these variables, with only difference in the naming of variables.
+
+
+## Inspection on the values of variables
+
+Next, we inspect the summary of these mean variables to see whether they are calculated without error.
+```{r summary_old_mean}
+summary(dataset[, c(108:114)])
+```
+But from the value labels of given dataset, we know that 'Natuur_ingaan' has 6 responses and other nature-relevant variables have 5 responses. Therefore, it is not fair to naively average these variables of different scales. Also, it is implausible to have a mean_trust larger than 5, since all trust variables have maximum 5 responses. Crowding variables have 7 responses for 1 to 4 and 10 responses for 5 to 8. Thankfully, the variables identification, stimulus and connection have consistent scales.
+
+Through an initial data analysis result, we highly doubt that there is typo in data entry for these six variables. After a discussion with client how to deal with these values, we agreed upon replacing them with `NA`.
+```{r fix_typo}
+# Filter values that are out of value label range
+## Natuur_ingaan (6-scales)
+dataset$Natuur_ingaan[dataset$Natuur_ingaan < 1 | dataset$Natuur_ingaan > 6]  <- NA
+## Other nature-relevant variables (5-scales)
+dataset[, c(17:19)][dataset[, c(17:19)] < 1 | dataset[, c(17:19)] > 5]  <- NA
+## Trust-relevant variables (5-scales)
+dataset[, c(22:41)][dataset[, c(22:41)] < 1 | dataset[, c(22:41)] > 5]  <- NA
+## Crowding_1 - Crowding_4 (7-scales)
+dataset[, c(42:45)][dataset[, c(42:45)] < 1 | dataset[, c(42:45)] > 7]  <- NA
+## Crowding_5 - Crowding_8 (10-scales)
+dataset[, c(46:49)][dataset[, c(46:49)] < 1 | dataset[, c(46:49)] > 10]  <- NA
+## Computer_1 - Ccomputer_5 (5-scales)
+dataset[, c(5:8)][dataset[, c(5:8)] < 1 | dataset[, c(5:8)] > 5]  <- NA
+
+# Calculate mean of these variables WITHOUT TYPO VALUES
+dataset <- dataset %>% 
+  mutate(mean_nature = rowMeans(select(dataset, c(16:19)))) %>% 
+  mutate(mean_trust = rowMeans(select(dataset, c(22:41)))) %>% 
+  mutate(mean_crowding = rowMeans(select(dataset, c(42:49)))) %>%   
+  mutate(mean_identification = rowMeans(select(dataset, c(60)))) %>%   
+  mutate(mean_stimulus = rowMeans(select(dataset, c(51:55)))) %>% 
+  mutate(mean_connection = rowMeans(select(dataset, c(56:75)))) %>% 
+  mutate(mean_computer = rowMeans(select(dataset, c(5:8))))
+
+summary(dataset[, c(108:114)])
+```
+
+## Standardizing different scales of variables into numeric scale
+
+Even after fixing the typo values, there remains a problem in analysis: differences in scale. Since not every variable is in the same length of Likert scale, it causes a problem when averaging them into a mean variable, e.g. nature variable with 6-response variable and 5-response variables have different scales that cannot be simply averaged because a mean variable with value larger than 5 does not have a meaning in terms of 5-response variable.
+
+Therefore, we suggest a standardization of every scale into a normalized 0-1 range scale. The normalized scale $z_i$ from original scale $x_i$ is as the following formula:
+$z_i = \frac{x_i - min(x_i)}{max(x_i) - min(x_i)}$
+```{r normalized_scale}
+# Normalize scales into 0-1 range
+## Natuur_ingaan (6-scales)
+dataset$Natuur_ingaan <- (dataset$Natuur_ingaan - 1)/(6 -1)
+## Other nature-relevant variables (5-scales)
+dataset[, c(17:19)] <- (dataset[, c(17:19)] - 1)/(5 - 1)
+## Trust-relevant variables (5-scales)
+dataset[, c(22:41)] <- (dataset[, c(22:41)] - 1)/(5 - 1)
+## Crowding_1 - Crowding_4 (7-scales)
+dataset[, c(42:45)] <- (dataset[, c(42:45)] - 1)/(7 - 1)
+## Crowding_5 - Crowding_8 (10-scales)
+dataset[, c(46:49)] <- (dataset[, c(46:49)] - 1)/(10 - 1)
+## Identification_1 (7-scales)
+dataset[, c(50)] <- (dataset[, c(50)] - 1)/(7 - 1)
+## Stimulus_1 - Crowding_5 (10-scales)
+dataset[, c(51:55)] <- (dataset[, c(51:55)] - 1)/(5 - 1)
+## Stimulus_1 - Crowding_5 (4-scales)
+dataset[, c(56:75)] <- (dataset[, c(56:75)] - 1)/(4 - 1)
+## Computer-relevant variables (5-scales)
+dataset[, c(5:8)] <- (dataset[, c(5:8)] - 1)/(5 - 1)
+
+# Calculate mean of these variables WITHOUT TYPO VALUES
+dataset <- dataset %>% 
+  mutate(mean_nature = rowMeans(select(dataset, c(16:19)))) %>% 
+  mutate(mean_trust = rowMeans(select(dataset, c(22:41)))) %>% 
+  mutate(mean_crowding = rowMeans(select(dataset, c(42:49)))) %>%   
+  mutate(mean_identification = rowMeans(select(dataset, c(60)))) %>%   
+  mutate(mean_stimulus = rowMeans(select(dataset, c(51:55)))) %>% 
+  mutate(mean_connection = rowMeans(select(dataset, c(56:75)))) %>% 
+  mutate(mean_computer = rowMeans(select(dataset, c(5:8))))
+
+summary(dataset[, c(108:114)])
+```
+Hereby we have normalized scales for every variable.
+
+
+## Final dataset
+
+The final dataset will contain the six variables with normalized scales, along with five additional information for possible future research: 'Age(Leeftijd)', 'Sex(Geslacht)', 'Ethnicity(Etniciteit)' and 'Year_of_living(Jaren_woonachtig)' for demographics study; and 'mean_computer'(also normalized scale) for method bias study.
+```{r final_dataset}
+# Store aforementioned information into a final dataset
+dataset <- dataset[, c(108:113, 9:11,14, 15, 114)]
+dataset <- dataset[-which(dataset$Conditie == 3),]
+dataset[dataset == 99] <- NA
+summary(dataset)
+perc.of.na <- function(x){sum(is.na(x))/length(x)*100}
+print(round(apply(dataset, 2, perc.of.na),2))
+md.pairs(dataset)
+```
+To explain in detail what the values of each variable of normalized scale mean:
+
+1. Higher the values of six variables, stronger the participant agrees to the influence of variable. Higher nature: more interaction with nature(rural) environment;
+higher trust: more belief or trust on other people;
+higher crowding: living in more crowded environment;
+higher identification: more likely to identify with other people in the same municipality;
+higher stimulus: more (social) stimuli input to the participant;
+higher connection: more connected with other people;
+higher computer: more computer-savvy and familiar.
+
+# Descriptive statistics
+```{r, echo = FALSE}
+table(dataset$Conditie)
+table(dataset$Geslacht)
+
+### Computing the sd of every variable for the two area groups
+
+m1 <- round(tapply(dataset$Leeftijd, dataset$Geslacht, mean, na.rm = TRUE),2)
+table(dataset$Etniciteit)
+table(dataset$Conditie)
+table(dataset$Geslacht, dataset$Conditie)
+m2 <- round(tapply(dataset$Leeftijd, dataset$Conditie, mean, na.rm = TRUE),2)
+m3 <- round(tapply(dataset$mean_trust, dataset$Conditie, mean, na.rm = TRUE),2)
+m4 <- round(tapply(dataset$mean_crowding, dataset$Conditie, mean, na.rm = TRUE),2)
+m5 <- round(tapply(dataset$mean_identification, dataset$Conditie, mean, na.rm = TRUE),2)
+m6 <- round(tapply(dataset$mean_stimulus, dataset$Conditie, mean, na.rm = TRUE),2)
+m7 <- round(tapply(dataset$mean_connection, dataset$Conditie, mean, na.rm = TRUE),2)
+m8 <- round(tapply(dataset$Jaren_woonachtig, dataset$Conditie, mean, na.rm = TRUE),2)
+m9 <- round(tapply(dataset$mean_computer, dataset$Conditie, mean, na.rm = TRUE),2)
+
+###
+
+sd1 <- round(tapply(dataset$Leeftijd, dataset$Geslacht, sd, na.rm = TRUE),2)
+sd3 <- round(tapply(dataset$mean_trust, dataset$Conditie, sd, na.rm = TRUE),2)
+sd4 <- round(tapply(dataset$mean_crowding, dataset$Conditie, sd, na.rm = TRUE),2)
+sd5 <- round(tapply(dataset$mean_identification, dataset$Conditie, sd, na.rm = TRUE),2)
+sd6 <- round(tapply(dataset$mean_stimulus, dataset$Conditie, sd, na.rm = TRUE),2)
+sd7 <- round(tapply(dataset$mean_connection, dataset$Conditie, sd, na.rm = TRUE),2)
+sd8 <- round(tapply(dataset$Jaren_woonachtig, dataset$Conditie, sd, na.rm = TRUE),2)
+sd9 <- round(tapply(dataset$mean_computer, dataset$Conditie, sd, na.rm = TRUE),2)
+
+
+### T-tests for the two area groups
+
+t.test(Leeftijd~Conditie, data = dataset)
+t.test(mean_trust~Conditie,data = dataset)
+t.test(mean_crowding~Conditie, data = dataset)
+t.test(Jaren_woonachtig~Conditie, data = dataset)
+t.test(mean_identification~Conditie, data = dataset)
+t.test(mean_stimulus~Conditie, data = dataset)
+t.test(mean_connection~Conditie, data = dataset)
+t.test(mean_computer~Conditie, data = dataset)
+```
+
+# Initial data analysis
+
+### Plots
+```{r, echo = FALSE, warning = FALSE}
+
+#New dataset without NA's
+
+dataset2 <- na.omit(dataset)
+correlation <- cor(dataset2)
+correlation
+
+corrplot::corrplot(correlation, method = "square", type="upper", 
+        tl.col="black", tl.srt = 45)
+
+# Histograms
+
+ggplot(gather(dataset), aes(value)) + 
+  geom_histogram(bins = 10) + 
+  facet_wrap(~key, scales = 'free_x')
+
+# Scatter plots
+
+caret::featurePlot(x = dataset2[,c(1,3:12)], 
+            y = dataset2[,2])
+```
+
+### Linear regression
+```{r, echo = FALSE, warning = FALSE}
+
+# Fitting a linear regression
+
+lm.model <- lm(mean_trust~.,data = dataset2)
+summary(lm.model)
+hist(lm.model$residuals)
+car::vif(lm.model)
+#Backward elimination 
+
+b_back <- MASS::stepAIC(lm.model) 
+b_best <- formula(b_back)
+
+# Keep model indicated by elimination
+
+lm.model2 <- lm(formula = b_best, data = dataset2)
+print(summary(lm.model2))
+
+# Final model
+
+final.model<- lm(mean_trust ~ mean_identification + mean_connection, dataset2)
+summary(final.model)
+
+lm2.df <- broom::augment(lm.model2)
+
+# Studentized residuals plot
+
+ggplot(lm2.df, aes(x=lm2.df$.fitted, y=lm2.df$.std.resid))+ xlab('Fitted')+ylab("Studentized Residuals")+
+  geom_point(shape=1) + geom_hline(yintercept = 0, color="red")
+
+
+# QQ Plot
+
+car::qqPlot(lm.model2$residuals, "norm", ylab="Residuals")
+```
+
+### Multiple Imputation
+```{r, echo = FALSE}
+dataset$Conditie <- as.factor(dataset$Conditie)
+set.seed(1234)
+# Performing a preliminary multiple imputation 
+trustImp <- mice(dataset, maxit = 0)
+meth <- trustImp$method
+pred <- trustImp$predictorMatrix
+summary(trustImp)
+
+# 2nd trial of multiple imputation
+
+trustImp <- mice(dataset, pred = pred, meth = meth, 
+                           m = 20, seed = 500)
+
+summary(trustImp)
+print(trustImp)
+print(trustImp$imp$Leeftijd)
+print(trustImp$imp$Conditie)
+# Plot of means and sd of variables agains the iterations
+
+pdf(paste("myOut.pdf", sep=""))
+plot(trustImp)
+dev.off()
+ 
+pdf(paste("myOut2.pdf", sep=""))
+print(xyplot(trustImp, Leeftijd ~ mean_trust| .imp, pch=20, cex=1.4))
+print(xyplot(trustImp, Geslacht ~ mean_trust| .imp, pch=20, cex=1.4))
+print(xyplot(trustImp, Jaren_woonachtig ~ mean_trust| .imp, pch=20, cex=1.4))
+print(xyplot(trustImp, Etniciteit ~ mean_trust| .imp, pch=20, cex=1.4))
+print(xyplot(trustImp, mean_connection ~ mean_trust| .imp, pch=20, cex=1.4))
+print(xyplot(trustImp, mean_crowding ~ mean_trust| .imp, pch=20, cex=1.4))
+print(xyplot(trustImp, mean_stimulus ~ mean_trust| .imp, pch=20, cex=1.4))
+print(xyplot(trustImp, mean_identification ~ mean_trust| .imp, pch=20, cex=1.4))
+print(xyplot(trustImp, mean_nature ~ mean_trust| .imp, pch=20, cex=1.4))
+print(xyplot(trustImp, mean_computer ~ mean_trust| .imp, pch=20, cex=1.4))
+print(xyplot(trustImp, Conditie ~ mean_trust| .imp, pch=20, cex=1.4))
+dev.off()
+```
+
+### Pool model
+```{r, echo=FALSE}
+library(knitr)
+imp.model <- with(trustImp, lm(mean_trust ~ Conditie + Geslacht + Leeftijd +
+                                 Etniciteit + mean_computer + Jaren_woonachtig +
+                                 mean_nature + mean_stimulus + mean_identification +
+                                 mean_crowding + mean_connection))
+pool.model <- pool(imp.model)
+print(pool.model)
+print(summary(pool.model))
+
+# t-test
+imp.model2 <- with(trustImp, lm(mean_trust ~ Conditie))
+pool.model2 <- pool(imp.model2)
+print(pool.model2)
+r1 <-summary(pool.model2)
+
+kable(r1)
+
+pool.r.squared(imp.model)
+```
+
+### F-Test
+```{r, echo=FALSE}
+#create.designMatrices.waldtest <- function(pars, k )
+#{
+  #  NP <- length(pars)
+   # Cdes <- matrix( 0, nrow=k, ncol=NP)
+    #colnames(Cdes) <- pars
+    #rdes <- rep(0,k)
+    #res <- list( Cdes=Cdes, rdes=rdes )
+    #return(res)
+#}
+
+Fru <- function(dataset, response, predictors, testpredictors){
+
+#Creating a string of the specific linear model
+eq <- paste(response, " ??? ",paste(predictors, collapse = " + "))
+
+#Computing the pooled model using the pool function in mice
+
+model <- with(dataset, lm(as.formula(eq)))
+
+pooled.model <- pool(model)
+
+#Creating arrays containing the regression
+
+#coefficients and covariance matrices of each
+
+# imputed dataset, denoted qhat and u,
+
+#respectively.
+
+qhat <- MIextract (model$analyses, fun=coef)
+
+u <- MIextract (model$analyses, fun=vcov)
+
+#Creating a vector containing the parameter names of the model.
+
+pars <- names(qhat[[1]])
+
+#creating a design matrix indicating which of the
+
+#parameters inqhat are tested simultaneously. The
+
+#create.designMatrices.waldtest function facilitates
+
+#the creation of the design matrix. Since the
+
+#miceadds manual (Robitzsch, Grund, & Henke, 2017),
+
+#pp. 103-107) gives some clear examples of this
+
+#function, the next lines are not further explained.
+
+design <- create.designMatrices.waldtest(pars = pars,
+
+k = length(testpredictors))
+
+Cdes <- design$Cdes
+
+rdes <- design$rdes
+
+ii <- 0
+
+for (predictor in testpredictors) {
+
+ii <- ii +1
+
+Cdes[ii, predictor] <- 1
+
+}
+
+#The MIwaldtest function in the miceadds package
+
+#calculates a pooled F value testing the
+
+#parameters in vector "testparameters"
+
+#for significance
+
+Wald <- MIwaldtest(qhat, u, Cdes, rdes)
+
+summary(Wald)
+
+}
+
+```
+
+### Linear regression with imputed data
+```{r, echo = FALSE}
+#New dataset
+newdataset1 <- mice::complete(trustImp, 3)
+newdataset2 <- mice::complete(trustImp, 8)
+newdataset3 <- mice::complete(trustImp, 15)
+
+# Linear regression with imputed dataset
+
+imp.lm <- lm(mean_trust~., data = newdataset3)
+summary(imp.lm)
+hist(imp.lm$residuals)
+car::vif(imp.lm)
+
+#Backward elimination 
+
+b_back <- MASS::stepAIC(imp.lm) 
+b_best <- formula(b_back)
+
+# Keep model indicated by elimination
+
+imp.lm2 <- lm(formula = b_best, data = newdataset3)
+summary(imp.lm2)
+
+implm2.df <- broom::augment(imp.lm2)
+
+# Studentized residuals plot
+
+ggplot(implm2.df, aes(x=implm2.df$.fitted, y=implm2.df$.std.resid))+ xlab('Fitted')+ylab("Studentized Residuals")+
+  geom_point(shape=1) + geom_hline(yintercept = 0, color="red")
+
+
+# QQ Plot
+
+car::qqPlot(imp.lm2$residuals, "norm", ylab="Residuals")
+```
+
+# T-test
+```{r, echo = FALSE}
+t.test(mean_trust ~ Conditie, data = newdataset1)
+t.test(mean_trust ~ Conditie, data = newdataset2)
+t.test(mean_trust ~ Conditie, data = newdataset3)
+print(t.test(mean_trust ~ Conditie, data = dataset))
+```

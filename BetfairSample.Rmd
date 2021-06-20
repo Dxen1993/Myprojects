@@ -1,0 +1,64 @@
+---
+title: "Betfair"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r, echo=FALSE}
+rm(list = ls())
+library(readxl)
+library(ggplot2)
+library(tidyr)
+library(corrplot)
+```
+
+### Dataset
+```{r, echo=FALSE}
+betfairdata <- read_excel("Sample.xlsx")
+
+#Turn Event name variable into numeric
+
+betfairdata$`Event Name` <- as.factor(betfairdata$`Event Name`)
+betfairdata$`Event Name` <- as.numeric(betfairdata$`Event Name`)
+
+#Turn Event name variable into numeric
+betfairdata$`Bet On` <- as.factor(betfairdata$`Bet On`)
+betfairdata$`Bet On` <- as.numeric(betfairdata$`Bet On`)
+betfairdata$Date <- as.numeric(as.Date(betfairdata$Date, origin = "1900-01-01"))
+#Summary of dataset
+
+summary(betfairdata)
+head(betfairdata)
+betfairdata <- na.omit(betfairdata)
+betfairdata <- betfairdata[,-1]
+```
+
+### Histograms
+```{r, echo=FALSE}
+
+### A panel of histograms for all the variables
+
+ggplot(gather(betfairdata), aes(value)) + 
+  geom_histogram(bins = 10) + 
+  facet_wrap(~key, scales = 'free_x')
+```
+
+### Correlation
+```{r, echo=FALSE}
+
+# Estimating correlation with all the variables
+
+corbf <- cor(betfairdata)
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(corbf, method="color", col=col(200),  
+         type="upper", order="hclust", 
+         addCoef.col = "black", 
+         tl.col="black", tl.srt=45, 
+         diag=FALSE)
+
+```

@@ -1,0 +1,1329 @@
+---
+title: "Greek Elections"
+author: "Dimitris Xenos"
+date: "August 25, 2019"
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Introduction
+
+This project is about investigating the characteristics that determine the election of a for the national Greek election. In order to accomplish that, 18 variables were introduced and were created by the researcher. The variables may seem totally random, but they were placed with a certain reasoning. The job they perform may influence voters due to high prestige, or that candidates are normal people fighting for their daily lives. Other 2 variables are social media influence and tv exposure. For the first one, it couldn't be excluded since in our times, they play an important role and they are widely used for political campaigns. On the other hand, appearances on television were always related to high popularity, since a large number of voters watch the news and get informed by newscasts. Another 2 variables are the marital status and kids, 2 variables which are really important for Greek society, especially the voters of New Democracy that are considered more conservative and traditional and estimate that family shows a great amount of stability. Variables like previously elected and political experience, are highly related with experience and trust that voters will be represented sufficiently. On the other hand, people these days express their grudge towards to politicians that have been involved with politics all these years and they are looking for new and incorruptible candidates. Academic background plays an important role as well since educated people are more qualified and equipped to deal with matters of the state. Last but not least is the foreign language. Foreign funds were on top of the agenda of New Democracy, so the candidates of the party should master foreign languages in order to communicate and discuss with foreign investors.
+
+All these data were mainly collected via the candidates' Facebook pages, their CVs, online articles and interviews, YouTube and TV. 
+During this project a description of the dataset and the variables will be provided, general statistics about these variables, alone and in combination with the dependent variable. 2 logistic models with and without factors and prediction with logistic, ridge and lasso regression. All these accompanied by table, charts and graphs. 
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+rm(list = ls())
+library(readxl)
+library(corrplot)
+library(caret)
+library(ellipse)
+library(ggplot2)
+library(tidyverse)
+library(lme4)
+library(MASS)
+library(Metrics)
+library(MLmetrics)
+library(lmtest)
+library(naivebayes)
+library(MASS)
+library(lars)
+library(scales)
+library(knitr)
+library(broom)
+library(plyr)
+library(tinytex)
+library(dplyr)
+library(car)
+library(jtools)
+library(ggpubr)
+library(effects)
+library(imager)
+library(Cairo)
+```
+
+### Reading dataset
+```{r, echo = FALSE, warning = FALSE}
+candidates <- read_excel(path = "ND.xlsx", sheet = "new", col_names = T)
+
+# Turning dataset into a data frame
+
+candidates <- data.frame(candidates) 
+
+# Removing collumn with names(no use)
+
+candidates <- candidates[,-1]
+head(candidates)
+summary(candidates)
+```
+
+The dataset is consisted of 18 variables. 17 of them are explanatory variables and 1 is the dependent. The independent variables are 1) PROFESSION, it is a categorical variable of 9 levels. The original variable was consisted of the profession of each candidate. In order to have a meaning, these job descriptions were categorized into 10 major levels. These are: Law (Lawyers, Notary, Judges), Academic (Professors, Historic, Political scientists and Teachers), Health (Doctors, Nurses, Physiotherapists,Vets), Public (Military, Retired, Public sector, Municipality clerks) in general people working for the state, Business (Freelancers, Traders, Businessman, Private sector), Technical (Engineers, Architects, Informatics), Scientistis (Agriculturists, Biologists, Geologists), Economics (Accountants, Insurance, Bank clerks, Logistics, Brokers, Economists)and Journalists. Next variable is if a candidate has been previously elected. Obviously, it is a logical variable (Yes, No). 
+
+Next variables are the Age of the candidate and it is consisted of 5 levels (30-40, 40-50, 50-60, 60-70, 70-80). Next one is a variable called "Exposure in TV" and it is consisted of 4 levels. First level is None, which means that there were one or zero appearances of that candidate on television. Next level is Small, and it refers to candidates that appeared only in small, local tv channels. The Mediocre level describes candidates that were both appeared in local and national channels more than 10 times. Lastly the large exposure in tv is about those candidates who were on national tv on regular basis. The 5th variable is the political experience of the candidates and has the same levels as the previous variable. None describes candidates that were never involved with politics. Small describes people that have been elected as city councilors, or mayors. In general people involved with the local government. On the other hand, people that have been elected once or 2 times, or have been general secretaries are included on the Mediocre category. Lastly people that have been elected more than 3 times, or have been appointed as deputury ministers or ministers belong to the Large level. 
+
+Next variable is Political Views and is a 3-level factor. Right, Conservative and Liberal are the views of the candidates. That characteristic was determined either by personal statements or it is declared on their social media pages. The gender of the candidates is a variable that was included as well. Another 4-level factor is the Social media influence of each candidate. None represents the candidates that don't have social media at all or a Facebook page with less than 500 likes. Small describes those that have less than 2500 likes on their Facebook pages (it is a page dedicated on their political campaign and not their personal profiles). Mediocre describes candidates that have 2.500-7.000 likes on their Facebook pages and some influence on other social media (like Instagram, Twitter and YouTube), while Large includes those who have more than 7.000 Facebook page likes, hundreds of subscribers in YouTube and k followers in both Instagram and Twitter. The next variables refer to the Academic Background of the candidates (School, Bachelor, Master or PhD) and the Foreign Language (0, 1, 2, 3 or more) that a candidate knows. Another 2 variables refer to the Marital Status (Single, Married) and whether or not they have kids (Yes, No).
+
+Other 3 categorical variables included are "Chairs", "Family History" and "Working sector". The first one is about the number of candidates that can be elected based on the area. Greece is divided into areas and each area based on the number of voters can elect a certain number of candidates. Then Family History is a binary variable of "Yes" and "No" and corresponds to those who had or not, other family members involved with politics. The last binary variable is Working sector, with levels of Private and Public.
+
+Lastly there were also included 2 numeric variables, the years a candidate is in the parliament and their Facebook page likes.
+
+### Descriptive statistics
+```{r, echo = FALSE, warning = FALSE}
+
+# Pie chart with Professions and tables with total numbers of every factor
+
+colorlist1 <- c("blue", "red", "darkmagenta", "pink", "grey", "orange", "black", "white", 
+         "green", "brown", "antiquewhite", "firebrick1") # Creating a color list for Professions
+
+table.professions <- table(candidates$PROFESSION)
+kable(as.data.frame(table.professions), digits = 10, 
+      format.args = list(scientific = -1), 
+      col.names = c("Professions", "Freq"),
+      caption = "Total numbers of Profession levels") # table with frequency of every profession
+
+percentage.professions <- round((table.professions/418)*100, 2) # Computing percentages for different Profession categories
+lprof <- paste(percentage.professions, "%", sep = "")
+plotit <- function(){
+
+  pie(table.professions, main = "Pie chart of Professions", col = colorlist1, 
+    labels = lprof, cex = 0.8) #Pie with percentages of every profession.
+legend("topright", names(table.professions), cex = 0.8, fill = colorlist1)
+}
+
+# Density plot of "Sepal.Length"
+#::::::::::::::::::::::::::::::::::::::
+density.p <- ggdensity(candidates, x = "LIKES", 
+                       fill = "CHAIRS", palette = "jco")
+# Draw the summary table of Sepal.Length
+#::::::::::::::::::::::::::::::::::::::
+# Compute descriptive statistics by groups
+stable <- desc_statby(candidates, measure.var = "LIKES",
+                      grps = "CHAIRS")
+stable <- stable[, c("CHAIRS", "length", "mean", "sd")]
+# Summary table plot, medium orange theme
+stable.p <- ggtexttable(stable, rows = NULL, 
+                        theme = ttheme("mOrange"))
+# Arrange the plots on the same page
+ggarrange(density.p, stable.p, 
+          ncol = 1, nrow = 3,
+          heights = c(0.5, 0.3, 0.3))
+```
+
+This section contains descriptive statistics, more specifically it is consisted of pies with percentages and total numbers of every factor for every variable. First is the professions' pie and table 1. Out of 418 candidates, 54(12.9%) are Academics, 12(2.9%) are included in the Scientists category, 55(13.16%) are dealing with Business, 35(8.4%) are involved with Economics, 58(13.9%) are working for the Health industry, 29(6.7%) of them are Journalists, 102(24.4%) are dealing with the Law field, 35(8.4%) were working for the state(Public sector) while 39(9.3%) had Technical jobs.
+
+```{r, echo=FALSE, warning=FALSE}
+# Pie chart with Academic background and tables with total numbers of every factor
+
+colorlist2 <- c("grey", "orange", "black", "white") # Color list that will be used for every for level factor
+
+table.education <- table(candidates$ACADEMIC.BACK.)
+row.names(table.education) <- c("School", "Bachelor", "Master's", "Phd")
+kable(as.data.frame(table.education), digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Academic Back.", "Freq"),
+      caption = "Total numbers of Academic Background levels") #table with freequency of every level of Academic background
+
+percentage.education <- round((table.education/418)*100, 2) # Computing percentages for different Academic background categories
+
+lba <- paste(percentage.education, "%", sep = "")
+pie(table.education, main = "Pie chart of Academic Background", col = colorlist2, 
+    labels = lba, cex = 0.9) # Pie with percentages of every Academic background
+legend("topright", names(table.education), cex = 0.9, fill = colorlist2)
+```
+
+Next chart and table 2 contain information about the Academic Background of the candidates. Most of them have at least one university degree, while 186(44.5%) have Bachelor's, 149(35.65%) have a Master degree and 71(17%) have a PhD. On the contrary only 9(2.15%) people have finished their education at school.
+
+```{r, echo = FALSE, warning = FALSE}
+# Pie chart with political Experience and tables with total numbers of every factor
+
+table.experience <- table(candidates$EXPERIENCE)
+row.names(table.experience) <- c("None", "Small", "Mediocre", "Large")
+kable(as.data.frame(table.experience), digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Political experience", "Freq"),
+      caption = "Total numbers of Politiical Experience levels") # table with freequency of every level of Experience
+
+percentage.experience <- round((table.experience/418)*100, 2) # Computing percentages for different Experience categories
+le <- paste(percentage.experience, "%", sep = "")
+pie(table.experience, main = "Pie chart of Political Experience", col = colorlist2, 
+    labels = le, cex = 0.9) # Pie with percentages of every Experience level
+legend("topright", names(table.experience), cex = 0.9, fill = colorlist2)
+```
+
+The following stats(pie and table 3) are about the political experience of the candidates. Most of the candidates are quite new to the political world, since most of them have no or small experience. More specific, 140(33.5%) of them have no experience, 156(37.3%) have small. Nonetheless there are 61(13.9%) candidates with mediocre experience and 58(13.9%) with large.
+
+```{r, echo = FALSE, warning = FALSE}
+# Pie chart with previously Elected variable and tables with total numbers of Yes and No
+
+colorlist3 <- c("red", "black") # Color list used for every Logical or 2 level factor
+table.prElected <- table(candidates$PR.ELECTED)
+kable(as.data.frame(table.prElected), digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Prev.Elected", "Freq"),
+      caption = "Total numbers of Previously Elected levels") # table with freequency of every level of previously Elected
+
+percentage.prElected <- round((table.prElected/418)*100, 2) # Computing percentages for the 2 Experience categories
+lpr <- paste(percentage.prElected, "%", sep = "")
+pie(table.prElected, main = "Pie chart of Previously Elected", col = colorlist3, 
+    labels = lpr, cex = 0.9) # Pie with percentages of the 2 previously Elected levels
+legend("topright", c("No", "Yes"), cex = 0.9, fill = colorlist3)
+```
+
+The previous statistic has a kind of correlation with the variable previously elected, since from the graph and table 4 it is concluded that 300(71.8%) of the candidates have never been elected while 118(28.2%) have been elected at least one time. 
+
+```{r, echo = FALSE, warning = FALSE}
+# Pie chart with TV Exposure and tables with total numbers of every factor
+
+table.tv <- table(candidates$TV.EXPOSURE)
+row.names(table.tv) <- c("None", "Small", "Mediocre","Large")
+kable(as.data.frame(table.tv), digits = 10, format.args = list(scientific = -1), 
+      col.names = c("TV Exposure", "Freq"),
+      caption = "Total numbers of Tv exposure levels") # table with freequency of every level of TV Exposure
+
+percentage.tv <- round((table.tv/418)*100,2) # Computing percentages for every TV exposure category
+ltv <- paste(percentage.tv, "%", sep = "")
+pie(table.tv, main = "Pie chart of exposure in TV", col = colorlist2, 
+    labels = ltv, cex = 0.9)  # Pie with percentages of the Exposure levels
+legend("topright", names(table.tv), cex = 0.9, fill = colorlist2)
+```
+
+As far as concerned the exposure of the candidates in television, information included in table 5 and the corresponding pie, was quite small. 105(25.1%) candidates had no appearances on neither the local nor the national tv channels, while 183(43.8%) of them had small exposure. Still there were candidates that had some serious number of attendances in big channels. 62(14.8%) of them belong to the mediocre category and 64(15.3%) to the large category.
+
+```{r, echo = FALSE, warning = FALSE}
+# Pie chart with Age and tables with total numbers of every factor
+
+colorlist4 <- c("grey", "orange", "black", "white", "green") # Color list for the 5 Age levels
+table.age <- table(candidates$AGE)
+kable(as.data.frame(table.age), digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Age", "Freq"),
+      caption = "Total numbers of Age levels") # table with freequency of every Age level
+
+percentage.age <- round((table.age/418)*100, 2) # Computing percentages for every Age category
+lage <- paste(percentage.age, "%", sep = "")
+pie(table.age, main = "Pie chart of Age", col = colorlist4, labels = lage, cex = 0.9)  # Pie with percentages of the Age levels
+legend("topright", names(table.age), cex = 0.9, fill = colorlist4)
+```
+
+The 6th pie and table refer to the age variable. 70(16.75%) candidates are between 30 and 40 age, 139(33.25%) belong to the 40-50 category, 132(31.6%) persons consist the 50-60 category, 56(13.4%) are between 60 and 70 and lastly only 12(2.9%) persons are more than 70 years old.
+
+```{r, echo = FALSE, warning = FALSE}
+# Pie chart with Social Media exposure and tables with total numbers of every factor
+
+table.socialmedia <- table(candidates$SOCIAL.MEDIA)
+row.names(table.socialmedia) <- c("None", "Small", "Mediocre", "Large")
+kable(as.data.frame(table.socialmedia), digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Soc.Media", "Freq"),
+      caption = "Total numbers of Social media exposure levels")  # table with freequency of every Social media influence level
+
+percentage.socialmedia <- round((table.socialmedia/418)*100, 2) # Computing percentages for every Social media category
+lsm <- paste(percentage.socialmedia, "%", sep = "")
+pie(table.socialmedia, main = "Pie chart of Social Media exposure", col = colorlist2, labels = lsm, cex = 0.9) # Pie with percentages of the Social Media levels
+legend("topright", names(table.socialmedia), cex = 0.9, fill = colorlist2)
+
+pie(table.socialmedia, main = "Pie chart",labels = lsm)
+```
+
+The following graph and table 7 are about the exposure of candidates in social media. Only 52(12.4%) had so indifferent exposure, but 173(41.4%) had small exposure. 129(30.9%) of them had Mediocre exposure, while 64(15.3) belong to the large level.
+
+```{r, echo = FALSE, warning = FALSE}
+# Pie chart with Political views and tables with total numbers of every factor
+
+colorlist5 <- c("grey", "orange", "black") # Color list with the 3 different categories of Political Views
+table.ideology <- table(candidates$POLITICAL.VIEWS)
+kable(as.data.frame(table.ideology), digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Pol.Views", "Freq"),
+      caption = "Total numbers of Political Views levels") # table with freequency of every Political view level
+
+percentage.ideology <- round((table.ideology/418)*100, 2) # Computing percentages for every Political Views category
+lpv <- paste(percentage.ideology, "%", sep = "")
+pie(table.ideology, main = "Pie chart of Political Views", col = colorlist5, labels = lpv, cex = 0.9) # Pie with percentages of the Political view levels
+legend("topright", names(percentage.ideology), cex = 0.9, fill = colorlist5)
+```
+
+Another statistic was obtained for the political views or else the ideology of the candidates. Table 8 indicates that this was the variable with the most missing values. Out of 418 candidates for only 119 of them the ideology was known. So, there are 72 liberals, 24 right-wing and 23 conservative candidates. The rest of them is unknown.
+
+```{r, echo = FALSE, warning = FALSE}
+# Pie chart with Gender and tables with total numbers of  Males and Females
+
+table.gender <- table(candidates$GENDER)
+kable(as.data.frame(table.gender), digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Gender", "Freq"),
+      caption = "Total numbers of Gender levels") # table with freequency of the 2 genders
+
+percentage.gender <- round((table.gender/418)*100, 2) # Computing percentages for Males and Females 
+lg <- paste(percentage.gender, "%", sep = "")
+pie(table.gender, main = "Pie chart of Gender", col = colorlist3, 
+    labels = lg, cex = 0.9) # Pie with percentages of the Males and Females
+legend("topright", c("Female", "Male"), cex = 0.9, fill = colorlist3)
+```
+
+Concerning the gender of the candidate's females are close to 170(41%) while males are near 248(59%). These info are provided by table 9.
+
+```{r, echo = FALSE, warning = FALSE}
+# Pie chart with Status and tables with total numbers of Married and Singles
+
+table.status <- table(candidates$STATUS)
+kable(as.data.frame(table.status), digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Status", "Freq"),
+      caption = "Total numbers of Status levels") # table with freequency of the Marital status levels'
+
+percentage.status <- round((table.status/418)*100, 2) # Computing percentages for Married and Singles
+ls <- paste(percentage.status, "%", sep = "")
+pie(table.status, main = "Pie chart of Marital Status", col = colorlist3, 
+    labels = ls, cex = 0.9) # Pie with percentages of the Married and Singles
+legend("topright", c("Single", "Married"), cex = 0.9, fill = colorlist3)
+```
+
+For the marital status of the candidates the statistics are relentless, since 320(76.6%) are married and 90(21%) are single.
+
+```{r, echo = FALSE, warning = FALSE}
+# Pie chart with number of Foreign Languages and tables with total numbers of every factor
+
+table.languages <- table(candidates$FOR.LANG.)
+kable(as.data.frame(table.languages), digits = 10, format.args = list(scientific = -1), 
+      col.names =c("For.Lang", "Freq"),
+      caption = "Total numbers of Foreign Language levels") # table with freequency of the different number of Foreign languages
+
+percentages.languages <- round((table.languages/418)*100, 2) # Computing percentages for different number of Foreign languages
+lfl <- paste(percentages.languages, "%", sep = "")
+pie(table.languages, main = "Pie chart of Foreign Languages", col = colorlist2, 
+    labels = lfl, cex = 0.9) # Pie with percentages of different number of Foreign languages
+legend("topright", names(table.languages), cex = 0.9, fill = colorlist2)
+```
+
+About the next statistic, the number of foreign languages that the candidates master is split. It is concluded from the pie and table 10 that, 124(29.7%) of them don't know any foreign language, 126(30.1%) know only one, 99(23.7%) know 2 and 62(14.8%) know at least 3.
+
+```{r, echo = FALSE, warning = FALSE}
+# Pie chart with Kids of the candidates and tables with total numbers of Yes and No
+
+table.kids <- table(candidates$KIDS)
+kable(as.data.frame(table.kids), digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Kids", "Freq"),
+      caption = "Total numbers of Kids levels") # table with freequency of the Kids level
+
+percentage.kids <- round((table.kids/418)*100, 2)  # Computing percentages for different Kids level
+lk <- paste(percentage.kids, "%", sep = "")
+pie(table.kids, main = "Pie chart of Kids", col = colorlist3, 
+    labels = lk, cex = 0.9) # Pie with percentages of different Kids level
+legend("topright", c("No", "Yes"), cex = 0.9, fill = colorlist3)
+```
+
+Table 12 shows that 302(72.25%) of them do have children, while 107(25.6%) don't have.
+
+```{r, echo = FALSE, warning = FALSE}
+# Pie chart with Chairs of the candidates and tables with total numbers and percentages
+
+table.chairs <- table(candidates$CHAIRS)
+row.names(table.chairs) <- c("Small", "Mediocre", "Large")
+kable(as.data.frame(table.chairs), digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Chairs", "Freq"),
+      caption = "Total numbers of Chairs levels") # table with freequency of the Chairs level
+
+percentage.chairs <- round((table.chairs/418)*100, 2)  # Computing percentages for different Chairs level
+lchairs <- paste(percentage.chairs, "%", sep = "")
+pie(table.chairs, main = "Pie chart of Chairs", col = colorlist5, 
+    labels = lchairs, cex = 0.9) # Pie with percentages of different Chairs level
+legend("topright", c("Small", "Mediocre", "Large"), cex = 0.9, fill = colorlist5)
+```
+
+Table 13 shows that there 175(41.9%) candidates in small areas, 134(32.1%) in the mediocre ones and 109(26.1%) in large areas.
+
+```{r, echo = FALSE}
+# Pie chart with Family History of the candidates and tables with total numbers and percentages
+
+table.famhist <- table(candidates$FAMILY.HISTORY)
+kable(as.data.frame(table.famhist), digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Family History", "Freq"),
+      caption = "Total numbers of Family History levels") # table with freequency of the Chairs level
+
+percentage.famhist <- round((table.famhist/418)*100, 2)  # Computing percentages for different Chairs level
+lfh <- paste(percentage.famhist, "%", sep = "")
+pie(table.famhist, main = "Pie chart of Family History", col = colorlist3, 
+    labels = lfh, cex = 0.9) # Pie with percentages of different Chairs level
+legend("topright", c("No","Yes"), cex = 0.9, fill = colorlist3)
+```
+
+Table 14 is about the political history of family of each candidates. 358(85.6%) don't have a family past while only 53(12.7%) do have.
+
+```{r, echo=FALSE}
+# Pie chart with Working sector of the candidates and tables with total numbers and percentages
+
+table.sector <- table(candidates$SECTOR)
+kable(as.data.frame(table.sector), digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Sector", "Freq"),
+      caption = "Total numbers of Sector levels") # table with freequency of the Chairs level
+
+percentage.sector <- round((table.sector/418)*100, 2)  # Computing percentages for different Chairs level
+lsec <- paste(percentage.sector, "%", sep = "")
+pie(table.sector, main = "Pie chart of Sector", col = colorlist3, 
+    labels = lsec, cex = 0.9) # Pie with percentages of different Chairs level
+legend("topright", c("Private", "Public"), cex = 0.9, fill = colorlist3)
+```
+
+From table 15 it is concluded that 253 of the candidates work or have worked for the private sector(60.5%), while 161(38.5%) have worked for the state.
+
+
+```{r, echo = FALSE, warning = FALSE}
+# Pie chart with Elected candidates and tables with total numbers of Yes and No
+
+table.elected <- table(candidates$ELECTED)
+kable(as.data.frame(table.elected), digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Elected", "Freq"),
+      caption = "Total numbers of Elected levels") # table with freequency of the 2 different Elected level
+percentage.elected <- round((table.elected/418)*100, 2) # Computing percentages for different levels of Elected
+ly <- paste(percentage.elected, "%", sep = "")
+pie(table.elected, main = "Pie chart of Elected", col = colorlist3, 
+    labels = ly, cex = 0.9) # Pie with percentages of different Elected levels
+legend("topright", c("No", "Yes"), cex = 0.9, fill = colorlist3)
+```
+
+Finally is the numbers and percentages considering the elected candidates. 265(63%) of them were not elected, while 153(37%) did make it to the parliament.
+
+A general conclusion, let's say a rough profile for a typical candidate with New Democracy is: A middle forties person, with at least tertiary education, married with children, with a decent social media influence, small experience with the politics and have a small exposure to the tv.
+
+### Tables of elected candidates and their characteristics
+```{r, echo = FALSE, warning = FALSE}
+
+# Elected candidates based on gender
+
+mixed.table1 <- table(candidates$GENDER, candidates$ELECTED)
+kable(mixed.table1, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of Gender and Elected levels")
+mixed.percentage1 <- round((mixed.table1/418)*100, 2) # computing the elected or not 
+                            #percentages for the Males and Females
+kable(mixed.percentage1, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of Gender and Elected levels")
+```
+
+That section is about tables with numbers and percentages of every variable in comparison with the dependent variable. Goal of this, is to determine a general profile of a person that is a member of the parliament after the latest national elections. The first 2 tables are about the preference of the voters based on gender. 
+
+So out of 170 candidate females, only 24(5.74%) were elected while 146(34.9%) were not. On the other hand, out of 248 men candidates, 119(28.5%) were not elected and 129(31%) did make it to the parliament. So out of 153 elected, 84.3% are males and 15.7% are females.
+
+```{r, echo = FALSE, warning = FALSE}
+# Elected candidates based on age
+
+mixed.table2 <- table(candidates$AGE, candidates$ELECTED)
+kable(mixed.table2, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of Age and Elected levels")
+mixed.percentage2 <- round((mixed.table2/418)*100, 2) # computing the elected or not 
+                            #percentages for the 5 Age levels
+kable(mixed.percentage2, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of Age and Elected levels")
+```
+
+Next table refers to the age categories. From youngest to oldest the stats are: 30-40) only 18 were elected (4.3%), 40-50) 43(10.29%) did make it, 50-60) 60(14.35%) candidates made it to the parliament, 60-70) 24(5.7%) were elected and lastly 7(1.7%) persons from the 70-80 category made it. On the other hand, 52(12.4%), 96(22.9%), 72(17.2%), 32(7.7%) and 5(1.2%) respectively didn't make it. 67% of the elected were between 40 and 60 years old.
+
+```{r, echo = FALSE, warning = FALSE}
+# Elected based on profession
+
+mixed.table3 <- table(candidates$PROFESSION, candidates$ELECTED)
+kable(mixed.table3, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of Profession and Elected levels")
+mixed.percentage3 <- round((mixed.table3/418)*100, 2) # computing the elected or not 
+                            #percentages for the 12 Profession levels
+kable(mixed.percentage3, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of Profession and Elected levels")
+```
+
+As far as profession is concerned, there is no indication that a specific profession has an advantage. It seems though that there is a preference on lawyers, engineers, economists, journalists and doctors since 111 of the members of the parliament perform these jobs. 
+
+```{r, echo = FALSE, warning = FALSE}
+# Elected candidates based on academic background
+
+mixed.table4 <- table(candidates$ACADEMIC.BACK., candidates$ELECTED)
+row.names(mixed.table4) <- c("None", "Small", "Mediocre", "Large")
+kable(mixed.table4, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of Academic Background and Elected levels")
+mixed.percentage4 <- round((mixed.table4/418)*100, 2) # computing the elected or not 
+                            #percentages for the Academic background levels
+kable(mixed.percentage4, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of Academic Background and Elected levels")
+
+```
+
+Next table is related to education. It is clearly deduced that voters choose people with tertiary education, since 79% of the elected have bachelor or masters. On the contrary only 1(0.6%) school graduate did make it.
+
+```{r, echo = FALSE, warning = FALSE}
+# Elected candidates based on their political views
+
+mixed.table5 <- table(candidates$POLITICAL.VIEWS, candidates$ELECTED)
+kable(mixed.table5, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of Political Views and Elected levels")
+mixed.percentage5 <- round((mixed.table5/418)*100, 2)# computing the elected or not 
+                            #percentages for the Political Views levels
+kable(mixed.percentage5, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of Political Views and Elected levels")
+```
+
+
+
+```{r, echo = FALSE, warning = FALSE}
+# Elected candidates based on their tv exposure
+
+mixed.table6 <- table(candidates$TV.EXPOSURE, candidates$ELECTED)
+row.names(mixed.table6) <- c("None", "Small", "Mediocre", "Large")
+kable(mixed.table6, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of TV Exposure and Elected levels")
+mixed.percentage6 <- round((mixed.table6/418)*100, 2) # computing the elected or not 
+                            #percentages for the TV Exposure levels
+kable(mixed.percentage6, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of TV Exposure and Elected levels")
+```
+
+Next tables refer to tv exposure and there is an indication that the higher the exposure the bigger the chances to get elected. For example, out of 64 persons with large exposure, 48(75%) did make it while on the contrary out of 105 candidates with no tv exposure only 11(10.5%) of them got elected.
+
+```{r, echo = FALSE, warning = FALSE}
+# Elected candidates bases on their social media influence
+
+mixed.table7 <- table(candidates$SOCIAL.MEDIA, candidates$ELECTED)
+row.names(mixed.table7) <- c("None", "Small", "Mediocre", "Large")
+kable(mixed.table7, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of Social Media exposure and Elected levels")
+mixed.percentage7 <- round((mixed.table7/418)*100, 2) # computing the elected or not 
+                            #percentages for the Social Media levels
+kable(mixed.percentage7, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of Social Media exposure and Elected levels")
+
+```
+
+On the other hand, for social media things are slightly different with the tv exposure. Nonetheless the main conclusion is that large influence on social media increases the chances of a candidate to get elected, since 107 of them have a medium or a large influence.
+
+```{r, echo = FALSE, warning = FALSE}
+# Elected candidates based on their marital status
+
+mixed.table8 <- table(candidates$STATUS, candidates$ELECTED)
+kable(mixed.table8, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of Marital Status and Elected levels")
+mixed.percentage8 <- round((mixed.table8/418)*100, 2) # computing the elected or not 
+                            #percentages for the Marital status levels
+kable(mixed.percentage8, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of Marital Status and Elected levels")
+
+```
+
+As it was mentioned before 318 candidates are married and it seems that plays a very important role since 127 of them were elected. So, 83% of the members of the Parliament for the New democracy party are married. 
+
+```{r, echo = FALSE, warning = FALSE}
+# Elected candidates that have been elected again
+
+mixed.table9 <- table(candidates$PR.ELECTED, candidates$ELECTED)
+kable(mixed.table9, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of previously Elected and Elected levels")
+mixed.percentage9 <- round((mixed.table9/418)*100, 2) # computing the elected or not 
+                            #percentages for those who did or not elected in the past
+kable(mixed.percentage9, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of previously Elected and Elected levels")
+```
+
+Another variable that strongly influences election is if a member has been elected again. Out of 118 person that have been elected before, 94(80%) of them elected again.
+
+```{r, echo = FALSE, warning = FALSE}
+# Elected candidates based on their political experience
+
+mixed.table10 <- table(candidates$EXPERIENCE, candidates$ELECTED)
+row.names(mixed.table10) <- c("None", "Small", "Mediocre", "Large")
+kable(mixed.table10, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of political Experience and Elected levels")
+mixed.percentage10 <- round((mixed.table10/418)*100, 2) # computing the elected or not 
+                            #percentages for experience
+kable(mixed.percentage10, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of politial Experience and Elected levels")
+```
+
+Next tables are about experience and are in line with the previous results. High political experience gives a boost to candidates in terms of getting elected. Out of 121 candidates with mediocre to large experience, 95 got elected. This correspond to 78.5%. 
+
+```{r, echo = FALSE, warning = FALSE}
+# Elected candidates who have or not kids
+
+mixed.table11 <- table(candidates$KIDS, candidates$ELECTED)
+kable(mixed.table11, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of Kids and Elected levels")
+mixed.percentage11 <- round((mixed.table11/418)*100, 2) # computing the elected or not 
+                            #percentages for parents or not
+kable(mixed.percentage11, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of Kids and Elected levels")
+```
+
+The kid's variable was investigated and there is strong indication that having kids is a bonus, while 116 candidates with kids did make it to the parliament. So, 75% of the government members do have kids.
+
+# Elected candidates based on chairs
+```{r}
+mixed.table12 <- table(candidates$CHAIRS, candidates$ELECTED)
+row.names(mixed.table12) <- c("Small", "Mediocre", "Large")
+kable(mixed.table12, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of Chair and Elected levels")
+mixed.percentage12 <- round((mixed.table12/418)*100, 2) # computing the elected or not 
+                            #percentages for parents or not
+kable(mixed.percentage12, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of Kids and Elected levels")
+```
+
+As far as concerned the chairs variable there is not a specific conclusion since it seems they are equally distributed. 
+
+# Elected candidates based on Sector
+```{r}
+mixed.table13 <- table(candidates$SECTOR, candidates$ELECTED)
+kable(mixed.table13, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of Sector and Elected levels")
+mixed.percentage13 <- round((mixed.table13/418)*100, 2) # computing the elected or not 
+                            #percentages for parents or not
+kable(mixed.percentage13, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of Sector and Elected levels")
+```
+
+For variable sector it also appears to be equally distributed since 80 and 73 people were elected, working for the private and publice sector respectively.
+
+# Elected candidates based on Family history
+```{r}
+mixed.table14 <- table(candidates$FAMILY.HISTORY, candidates$ELECTED)
+kable(mixed.table14, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of Family History and Elected levels")
+mixed.percentage14 <- round((mixed.table14/418)*100, 2) # computing the elected or not 
+                            #percentages for parents or not
+kable(mixed.percentage14, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of Family History and Elected levels")
+```
+
+It seems that there is a strong advantage being someone with no family background in politics since 118 out of 153 elected don't have one. This corresponds to 77%.
+
+A general conclusion for those who got elected are people who have been elected before, they are between 40 and 60 years old, they are married with kids, they have a bachelor or master's degree, they have no family background and they have experience, so they are not just elected one more time, but they have been multiple times in the parliament and probably have taken over bigger responsibilities, like ministers.
+
+### Mixed tables of Gender with Social Media, TV exposure and Experience
+```{r, echo = FALSE, warning = FALSE}
+table(candidates$TV.EXPOSURE, candidates$CHAIRS, candidates$ELECTED)
+# Gender and Social media
+
+tableSM.Gender <- table(candidates$SOCIAL.MEDIA, candidates$GENDER)
+row.names(tableSM.Gender) <- c("None", "Small", "Mediocre", "Large")
+kable(tableSM.Gender, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Female", "Male"),
+      caption = "Total numbers of Gender and Social media levels")
+percentageSm.Gender <- round((tableSM.Gender/418)*100, 2) 
+kable(percentageSm.Gender, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Female", "Male"),
+      caption = "Percentages of Gender and Social media levels")
+
+# Gender and TV Exposure
+
+tableTV.Gender <- table(candidates$TV.EXPOSURE, candidates$GENDER)
+row.names(tableTV.Gender) <- c("None","Small", "Mediocre", "Large")
+kable(tableTV.Gender, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Female", "Male"),
+      caption = "Total numbers of Gender and TV Exposure levels")
+percentageTV.Gender <- round((tableTV.Gender/418)*100, 2) 
+kable(percentageTV.Gender, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Female", "Male"),
+      caption = "Percentages of Gender and TV Exposure levels")
+
+# Gender and Experience
+
+tableExp.Gender <- table(candidates$EXPERIENCE, candidates$GENDER)
+row.names(tableExp.Gender) <- c("None","Small", "Mediocre", "Large")
+kable(tableExp.Gender, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Female", "Male"),
+      caption = "Total numbers of Gender and Experience levels")
+percentageExp.Gender <- round((tableExp.Gender/418)*100, 2) 
+kable(percentageExp.Gender, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("Female", "Male"),
+      caption = "Percentages of Gender and Experience levels")
+```
+
+The purpose of this section is to investigate why female candidates of New Democracy are so underrepresented in parliament. From previous tables it was concluded that 72% of those who have large social media influence made it to the parliament. Only 2.9% of candidates are females with large impact on social media. The same goes for tv exposure, since 64 persons had large exposure in national channels and only 12 were females. 75% of the candidates of that category were elected. Lastly is the experience. Large experience seems that plays a significant role since 86% of the candidates, with big experience were elected. Only 1.2% of the candidates are females with large experience.
+
+### Mixed tables with social media, tv exposure and experience
+```{r, echo = FALSE, warning = FALSE}
+# Previously Elected and Social Media levels
+
+tableSM.prEl <- table(candidates$SOCIAL.MEDIA, candidates$PR.ELECTED)
+kable(tableSM.prEl, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of Previously.Elected and Social media levels")
+percentageSM.prEl <- round((tableSM.prEl/418)*100, 2) 
+kable(percentageSM.prEl, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of Previously.Elected and Social media levels")
+
+# Previously Elected and TV Exposure
+
+tableTV.prEl <- table(candidates$TV.EXPOSURE, candidates$PR.ELECTED)
+kable(tableTV.prEl, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of Previously.Elected and TV Exposure levels")
+percentageTV.prEl <- round((tableTV.prEl/418)*100, 2) 
+kable(percentageTV.prEl, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of Previously.Elected and TV Exposure levels")
+
+# Previously Elected and Experience
+
+tableExp.prEl <- table(candidates$EXPERIENCE, candidates$PR.ELECTED)
+kable(tableExp.prEl, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Total numbers of Previously.Elected and Experience levels")
+percentageExp.prEl <- round((tableExp.prEl/418)*100, 2) 
+kable(percentageExp.prEl, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("No", "Yes"),
+      caption = "Percentages of Previously.Elected and Exp levels")
+```
+
+Undeniably, the large category of Social Media, TV exposure and Experience has a serious impact on elections. It was also concluded that out of 119 people that were elected in the past, 94 of them made it again (80%). Combining these factors, it is easily understood that someone who has been elected in the past has serious chances of being elected again, not only due to that fact, but also because of high social media influence, a lot of TV appearances and big political experience. Characteristically, people with no social media and not elected in the past dominate those who did make it and had no social media, while on the contrary people who were elected previously and have large social media influence dominate those who haven't made it before and have a lot of followers. The same goes for television and numbers are more straightforward (25% of people that haven't been in the parliament before, have no television appearances even in local channels). Only 2 persons with no television appereances had made it in the past. 
+
+
+```{r, echo=FALSE}
+# Turning 1 into 0 and 2 into 1 for elected variable
+
+for (i in 1:nrow(candidates)) {
+  if(candidates$ELECTED[i] == "No"){
+    candidates$ELECTED[i] <- 0
+  }else if(candidates$ELECTED[i] == "Yes"){
+    candidates$ELECTED[i] <- 1
+  }
+}
+
+# Turning all variables into factors
+
+academic <- as.factor(candidates$ACADEMIC.BACK.)
+profession <- as.factor(candidates$PROFESSION)
+experience <- as.factor(candidates$EXPERIENCE)
+previous <- as.factor(candidates$PR.ELECTED)
+tv <- as.factor(candidates$TV.EXPOSURE)
+age <- as.factor(candidates$AGE)
+views <- as.factor(candidates$POLITICAL.VIEWS)
+socialmedia <- as.factor(candidates$SOCIAL.MEDIA)
+gender<- as.factor(candidates$GENDER)
+languages <- as.factor(candidates$FOR.LANG.)
+status <- as.factor(candidates$STATUS)
+kids <- as.factor(candidates$KIDS)
+chairs <- as.factor(candidates$CHAIRS)
+likes <- as.numeric(candidates$LIKES)
+prlmntyears <- candidates$PRLMNTYEARS
+famHistory <- as.factor(candidates$FAMILY.HISTORY)
+sector <- as.factor(candidates$SECTOR)
+y <- as.factor(candidates$ELECTED)
+
+
+# Creating a new dataset with factors
+
+candidates2 <- cbind(profession, academic, experience, previous, tv, age, views,
+                     socialmedia, gender,languages, status, kids, chairs, 
+                     likes, prlmntyears, sector, y)
+candidates2 <- as.data.frame(candidates2)
+
+# Summary of dataset
+
+summary(candidates2)
+
+# Continuing without political views(known for very few)
+
+candidates3 <- candidates2[,-c(7,14,15)]
+
+#candidates2$likes <- log(candidates2$likes)
+# Omitting NA's
+
+candidates3 <- na.omit(candidates3)
+
+candidates4 <- candidates[,-c(6, 14, 15)]
+candidates4 <- na.omit(candidates4) 
+```
+
+In that section, data transformation, a new dataset(candidates2) is created by turning all variables into factors and without the Political values since it has too many missing values. A candidates3 dataset is created from candidates2, without missing values and it is consisted of 14 categorical variables and 407 candidates. Lastly another dataset(candidates4) is created, from the original dataset, without political views and missing values. So candidates4 is the same in size with candidates2 but with no factors. There is also a small summary of candidates2 with means and missing values for every variable.  
+
+### Correlation and Plots
+```{r, echo =FALSE, warning= FALSE}
+
+# Correlation between the variables
+
+correlation <- cor(candidates3)
+correlation
+
+# Correlation plot
+
+corrplot(correlation, method = "square", type="upper", 
+        tl.col="black", tl.srt=45)
+
+# Boxplots
+
+#featurePlot(x = candidates2[, 1:11], 
+           # y = as.factor(candidates2$y), plot = "box", 
+            #scales = list(x = list(relation="free"), y = list(relation="free")), 
+            #adjust = 1.5, pch = ".", 
+            #layout = c(4, 3), auto.key = list(columns = 3))
+
+# Histograms
+
+ggplot(gather(candidates2), aes(value)) + 
+  geom_histogram(bins = 10) + 
+  facet_wrap(~key, scales = 'free_x')
+```
+
+Next section is consisted of correlations and plots (Cor.Plot, Boxplots, Histograms). As far as concerned the correlation plot, most of the variables are mathematically uncorrelated with the rest of the variables. It is a positive sign since collinearity is avoided. An indication of positive correlation between experience and previously elected (0.88), status and kids (0.66). Nonetheless none of them are going to be removed before the variance inflation factor is checked. Next is histogram plots. Although the variables are ordinal and some of them are binary it seems that most of them are normally distributed. Despite their small skewness they won't be transformed since we are going to apply logistic regression and for the other models, they will become too complex.
+
+
+### Logistic Model with factors
+```{r, echo = FALSE, warning = FALSE}
+
+# Turning 1 and 2 to 0 and 1
+
+for (i in 1:nrow(candidates3)) {
+  if(candidates3$y[i] == 1){
+    candidates3$y[i] <- 0
+  }else if(candidates3$y[i] == 2){
+    candidates3$y[i] <- 1
+  }
+}
+
+# Applying a logistic regression 
+
+log.regF1 <- glm(y ~ ., data = candidates3, family = "binomial")
+summary(log.regF1)
+vif(log.regF1)
+# Performing a backward elimination 
+
+backmodF1 <- stepAIC(log.regF1)
+backtestF1 <- formula(backmodF1)
+
+# New logistic regression after backward elimination
+
+log.regF2 <- glm(formula = backtestF1, data = candidates3, family = "binomial")
+summary(log.regF2) 
+
+histogram(log.regF2$residuals, xlim = c(-10,10))
+
+lrtest(log.regF2)
+# Confidence intervals 
+
+confint(log.regF2)
+```
+
+Logistic regression is performed where all variables are factors (nd3 dataset is used). First with elected as response variable and the other 14 as predictors. After that vif is inspected, since none of them exceed the threshold(equal to 5) none is removed before performing the same procedure, backward elimination. Therefore it ends up with a model consisting of profession, academic background, status, tv, kids, gender, social media, chairs and previously elected variables.
+
+So, using logistic regression it is concluded that being elected depends on gender, having or not kids having elected in the past, the area you are, the social media influence the profession and the academic background. These are the variables which are statistical significant(p-value < 0.05).
+
+Also an LR test is performed. It follows a chi-square distribution with 9 degrees of freedom. Final conclusion is that the model is significant since p-value is 2.2e-16.
+
+
+### Explaining the logistic regression coefficients 
+```{r, echo = FALSE, warning = FALSE}
+
+#Calculating the log odds of coefs
+
+prof.logoods <- round(exp(0.1771)/(1 + exp(0.1771)), 3) # 0.91
+educ.logodds <- round(exp(0.3777)/(1 + exp(0.3777)), 3) # 0.59
+previous.logodds <- round(exp(2.2243)/(1 + exp(2.2243)), 3) # 0.9
+gender.logodds <- round(exp(1.175)/(1 + exp(1.175)), 3) # 0.764
+sm.logodds <- round(exp(0.8556)/(1 + exp(0.8556)), 3) # 0.7
+kids.logodds <- round(exp(-0.8957)/(1+exp(-0.8957)), 3) # 0.29
+chairs.logodds <- round(exp(-0.639)/(1+exp(-0.639)), 3) # 0.345
+
+
+# Placing them on a data frame
+
+logodds.table <- cbind(previous.logodds, gender.logodds, kids.logodds, chairs.logodds,
+                       educ.logodds, sm.logodds, prof.logoods)
+logodds.table <- as.data.frame(logodds.table)
+kable(logodds.table, digits = 10, format.args = list(scientific = -1), 
+      col.names = names(logodds.table),
+      caption = "Log odds of betas for logistic regression")
+```
+
+In order to interpret the coefficients of a logistic regression, log odds of them have to be computed. So, for 1 unit increase in previously elected variables, there is 90%  someone gets elected.The same conclusion stands for the rest of the variables
+
+### Splitting the dataset and prediction with logistic model 2
+```{r, echo = FALSE, warning = FALSE}
+set.seed(1234)
+
+# Splitting dataset
+
+ind <- sample(2, nrow(candidates3), replace = T, prob = c(0.74, 0.26))
+
+# Train set
+
+train.set <- candidates3[ind == 1,]
+
+# Test set
+
+test.set <- candidates3[ind == 2,]
+
+
+# Accuracy of training set to get a hint for consistency of the model
+
+fitted.results <- predict(log.regF2, newdata = train.set, type = "response")
+fitted.results <- ifelse(fitted.results > 0.5,1,0)
+misClasificError <- round(mean(fitted.results != train.set$y),3)
+print(paste("Accuracy is",(1-misClasificError)*100)) # 79.1%
+
+# Accuracy of final model with test set
+
+fitted.results1 <- predict(log.regF2,newdata = test.set, type = "response")
+fitted.results1 <- ifelse(fitted.results1 > 0.5,1,0)
+misClasificError1 <- round(mean(fitted.results1 != test.set$y),3)
+Acclogreg <- 1 - misClasificError1 
+print(paste("Accuracy is",(1-misClasificError1)*100)) # 83.8%
+
+# Plot versus actual and predicted values
+
+testElected <- test.set$y
+plot(testElected, type = "l", lty = 2, col = "red")
+lines(fitted.results1, type = "l", col  = "black")
+legend("topright", c("Actual", "Predicted"), lwd = 1, col = 2:1)
+```
+
+This section is dedicated to predictions using the logistic model chosen above. In order to make predictions, first the dataset has to be split. 2 datasets are created, training set which consists 74% of candidates3, while test set consists the rest 26% of candidates3. So, training set has 300 candidates and test set has 102. First in order to get a hint about the consistency of the model, a prediction is made using the training test is used and is equal to 79.6%. 
+
+The same method is applied to determine the prediction of the model using the test set. It is equal to 83.3% which is very good. Then a plot is created where the actual values versus the predicted are visualized. The less deviation between these two, the better the prediction. Although the prediction is really good the predicted and actual lines are distinguishable. This could be due to little amount of data or, another model, may predict better in that specific situation.
+
+### Naive Bayes model for prediction
+```{r, echo= FALSE, warning = FALSE}
+
+set.seed(1234)
+
+# A modification of the dataset
+
+for (i in 1:nrow(candidates3)) {
+  if(candidates3$y[i] == 0){
+    candidates3$y[i] <- "No"
+  }else if(candidates3$y[i] == 1){
+    candidates3$y[i] <- "Yes"
+  }
+}
+
+ind1 <- sample(2, nrow(candidates3), replace = T, prob = c(0.74, 0.26))
+
+# Train set
+
+trainset <- candidates3[ind1 == 1,]
+
+# Test set
+
+testset <- candidates3[ind1 == 2,]
+
+# Naive bayes model
+
+NBmodel <- naive_bayes(y~., data = trainset, usekernel = T)
+#plot(NBmodel)
+
+### Predict 
+
+trainProbs <- predict(NBmodel, trainset, type = "prob")
+kable(head(cbind(trainProbs, trainset)), digits = 10, format.args = list(scientific = -1),
+      col.names = c("No", "Yes", names(candidates3)),
+      caption = "Probability of election of a candidate")
+
+#  Accuracy of model with train data
+
+trainProb1 <- predict(NBmodel, trainset)
+NBtrainTable <- table(trainProb1, trainset$y)
+NBtrainTable # Table with right predictions for train set
+accuracyNBtr <- sum(diag(NBtrainTable))/sum(NBtrainTable) # Confusion train matrix
+print(paste("Accuracy is",round(accuracyNBtr, 3)* 100)) # 79.1%
+
+# Accuracy of model with test data
+
+testProbs <- predict(NBmodel, testset)
+NBtestTable <- table(testProbs, testset$y)
+NBtestTable # Table with right predictions for test set
+accuracyNBtest <- round(sum(diag(NBtestTable))/sum(NBtestTable),3) # Confusion test matrix
+print(paste("Accuracy is",round(accuracyNBtest, 3) * 100)) # 77.1%
+```
+
+Since the plot indicated some deviance in predicted and actual values, different models have to be tested. So next solution is the naive Bayes model. First a modification to the dataset had to be made and turn the response variable into a character again. Then the dataset is split in the same way as previously. After that a naive Bayes model is performed with the train data, using kernel methods (usually better results are obtained). So, the first table includes the predicted probability that someone got elected or not for every candidate (only the first ten candidates of the train set appear). 
+
+After that another table is presented, that contains how many correct predictions were made, for both cases. There were 254 correct prediction (186 for those who didn't make it and 68 for those who did), while on the other hand, 69 cases were wrongly predicted. So, by calculating the confusion matrix for train data, it is concluded that the model's accuracy is 78.6%. 
+
+The same steps were followed for the train data. The prediction table is consisted of 68 (49 for "no" and 19 for "yes") correct and 16 wrong predictions. Finally, the accuracy of the model for test set is equal to 81%.
+
+A rough conclusion is that although new information was obtained by performing the naive Bayes model, the predictions were quite worse from the logistic regression model. Specifically as far as concerned the test set, the predictions were 2.3% worse.
+
+### Random Forest model and test errors
+```{r, echo=FALSE, warning = FALSE}
+
+set.seed(1234)
+test.set$y <- as.factor(test.set$y)
+train.set$y <- as.factor(train.set$y)
+
+rfmodel <- randomForest(y~., data = train.set)
+predTestforest <- predict(rfmodel, test.set)
+
+# Confusion matrix of train set
+
+RFtable <- confusionMatrix(predTestforest ,test.set$y)
+accRF <- round(RFtable$overall[[1]]*100, 3)
+
+
+FaccRF.ER <- round(mean(accRF),3)
+```
+
+
+
+### Prediction table with all models
+```{r, echo = FALSE, warning = FALSE}
+predframe <- cbind(Acclogreg, accuracyNBtest, accRF)*100
+predframe <- as.data.frame(predframe)
+kable(predframe, digits = 10, format.args = list(scientific = -1), 
+      col.names = names(predframe),
+      caption = "Accuracy of the 3 models tested with test data")
+predframe
+```
+
+Finally, a table containing the accuracy of the four models (Logistic regression, Naive Bayes, Ridge and Lasso regression). It is easily understood that ridge regression performs better in terms of accuracy since it is 3% better than logistic regression, 9.7% than Naive Bayes and 2.1% better than the Lasso. Next best predictions are obtained by Lasso with 84.7%. 
+
+Nonetheless as far as explaining(inference) how Elected is modeled, logistic regression is going to be preferred. Ridge will be used for prediction purposes. 
+
+### Hypothesis testing
+```{r}
+
+kruskal.test(y ~ chairs, data = candidates3)
+kruskal.test(y ~ profession, data = candidates3)
+#t.test(candidates3$y~candidates3$sector, mu = 0, alt = "two.sided",
+       #conf= 0.95, var.eq = F, paired = F)
+```
+Although there is no statistical difference between the areas of the candidates since p-value is >0.05, there is a statistical difference between the sector groups. Therefore we can safely assume that there is indeed a difference between those who work for the public and those who work for the private sector as far as the election variable is concerned. 
+
+
+# Probabilities and likes plots
+```{r, echo=FALSE}
+
+candidates5 <- candidates2
+for (i in 1:nrow(candidates5)) {
+  if(candidates5$y[i] == 1){
+    candidates5$y[i] <- 0
+  }else if (candidates5$y[i] == 2){
+    candidates5$y[i] <- 1
+  }
+}
+
+df4 <- candidates5[,-c(7,8,15)]
+
+chairs1 <- candidates$CHAIRS
+df4$chairs1 <- chairs1
+df4 <- na.omit(df4)
+lg4 <- glm(y ~ gender + kids + likes + chairs1 + likes*chairs1 + academic + experience
+           + tv + age + profession + previous + languages + status + sector, 
+           data = df4, family = "binomial")
+
+summary(lg4)
+
+eff.cowles <- allEffects(lg4, xlevels = 100)
+
+as.data.frame(eff.cowles[[]])
+
+plot(eff.cowles, 'likes:chairs1', lines=list(multiline=TRUE, lty= 1, 
+  lwd = 4, col=c("blue", "orange", "grey")),
+  axes=list(y=list(type="response", lab="Prob(ELECTED)")),
+  lattice=list(key.args = list(x = 0.5, y = 0.5, corner = c(1, 2))))
+
+
+m <- as.data.frame(eff.cowles[[12]])
+
+Small_Area <- m[which(m$chairs1 == "L2"),]
+Medium_Area <- m[which(m$chairs1 == "L3"),]
+Large_Area <- m[which(m$chairs1 == "L4"),]
+
+Small_Area <- Small_Area[,c(1,3)]
+Medium_Area <- Medium_Area[,c(1,3)]
+Large_Area <- Large_Area[,c(1,3)]
+
+all.x <- list(Small_Area = Small_Area$likes, Medium_Area = Medium_Area$likes,
+              Large_Area = Large_Area$likes)
+all.y <- list(Small_Area = Small_Area$fit, Medium_Area = Medium_Area$fit,
+              Large_Area = Large_Area$fit)
+
+diff1 <- as.numeric(0)
+for(i in nrow(Small_Area):2){
+  diff1[i] <- Small_Area$fit[i] - Small_Area$fit[i-1]
+}
+diff1
+diff2 <- as.numeric(0)
+for(i in nrow(Medium_Area):2){
+  diff2[i] <- Medium_Area$fit[i] - Medium_Area$fit[i-1]
+}
+
+diff3 <- as.numeric(0)
+for(i in nrow(Large_Area):2){
+  diff3[i] <- Large_Area$fit[i] - Large_Area$fit[i-1]
+}
+
+Small_Area <- cbind(Small_Area$likes, round(Small_Area$fit*100, 2), 
+                    round(diff1*100, 2))
+Small_Area <- as.data.frame(Small_Area)
+colnames(Small_Area) <- c("likes", "fit", "Percentage_Increase")
+
+Medium_Area <- cbind(Medium_Area$likes, round(Medium_Area$fit*100, 2), 
+                    round(diff2*100, 2))
+Medium_Area <- as.data.frame(Medium_Area)
+colnames(Medium_Area) <- c("likes", "fit", "Percentage_Increase")
+
+Large_Area <- cbind(Large_Area$likes, round(Large_Area$fit*100, 2), 
+                    round(diff3*100, 2))
+Large_Area <- as.data.frame(Large_Area)
+colnames(Large_Area) <- c("likes", "fit", "Percentage_Increase")
+Large_Area
+
+area1 <- load.image("s1.png")
+area2 <- load.image("m1.png")
+area3 <- load.image("l1.png")
+area1 <- as.raster(area1)
+area2 <- as.raster(area2)
+area3 <- as.raster(area3)
+
+
+areas <- list(Small_Area = area1, Medium_Area = area2, Large_Area = area3)
+
+FBs <- c("From the small Area plot we can conclude that in average a candidate with 0 followers on Facebook has 21% of making it to the parliament. For every 1800 increase of followers until he/she reaches 12300 followers, has an average increase of 9.2% of getting elected. At this point his/her probability of election is almost 86%. After 12300 followers every 1800 increase results to a smaller probability increase and around 17500 the probability is close to 1")
+
+FBm <- c("On the other hand, for the Medium areas something interesting arises, although the probability increase for every 1800 increase of followers is in average smaller, a candidate with 0 followers has 10% more chance to be elected than someone in Smaller area. The coresponding average increase until 12300 followers is 4,6% where the total % of making it to the parliament is 64%. For a candidate to reach 90% of getting elected in a medium area needs at least 27000 followers and double of them to reach 100%. So it seems that after a point every increase is really small.")
+
+FBl <- c("As expected the smallest increase of the probability of getting elected for every 1800 followers increase, belongs to the candidates of Large Areas. While at 0 followers they have 14.4% to get elected, at the stage of 35000 followers they are close to 50%. Here the average increase for every 1800 followers is equal to 2.5% but after a certain point this increase drops to almost 1%.")
+
+FB <- list(Small_Area = FBs, Medium_Area = FBm, Large_Area = FBl)
+```
+
+
+```{r, echo = FALSE, warning = FALSE}
+
+candidates2 <- read_excel(path = "ND.xlsx", sheet = "new2", col_names = T)
+head(candidates2)
+# Experience, Exposure, Social Media
+
+mca.table1 <- table(candidates2$EXPERIENCE, candidates2$TV.EXPOSURE, candidates2$SOCIAL.MEDIA)
+mca.table1 <- as.data.frame(mca.table1)
+colnames(mca.table1) <- c("Experience", "TV.Exposure", "Social.Media", "Freq")
+#mca.table1
+write.table(mca.table1, row.names = FALSE, file = "tm1.dat")
+
+# Profession, Exposure and Social Media
+
+mca.table2 <- table(candidates2$PROFESSION, candidates2$TV.EXPOSURE, candidates2$SOCIAL.MEDIA)
+mca.table2 <- as.data.frame(mca.table2)
+colnames(mca.table2) <- c("Profession", "TV.Exposure", "Social.Media", "Freq")
+#mca.table2
+write.table(mca.table2, row.names = FALSE, file = "tm2.dat")
+
+# TV exposure, Age and Experience   
+
+mca.table3 <- table(candidates2$TV.EXPOSURE, candidates2$AGE, candidates2$EXPERIENCE)
+mca.table3 <- as.data.frame(mca.table3)
+colnames(mca.table3) <- c("TV.Exposure", "Age", "Experience", "Freq")
+#mca.table3
+write.table(mca.table3, row.names = FALSE, file = "tm3.dat")
+
+# Profession, Chairs and Elected 
+
+mca.table4 <- table(candidates2$PROFESSION, candidates2$CHAIRS, candidates2$ELECTED)
+mca.table4 <- as.data.frame(mca.table4)
+colnames(mca.table4) <- c("Profession", "Chairs", "Elected", "Freq")
+write.table(mca.table4, row.names = FALSE, file = "tm4.dat")
+
+# Profession, Chairs, Sector 
+
+mca.table5 <- table(candidates2$PROFESSION, candidates2$CHAIRS, candidates2$SECTOR)
+mca.table5 <- as.data.frame(mca.table5)
+colnames(mca.table5) <- c("Profession", "Chairs", "Sector", "Freq")
+write.table(mca.table5, row.names = FALSE, file = "tm5.dat")
+
+mca.table6 <- table(candidates2$PROFESSION, candidates2$SECTOR, candidates2$ELECTED)
+mca.table6 <- as.data.frame(mca.table6)
+colnames(mca.table6) <- c("Profession", "Sector", "Elected", "Freq")
+write.table(mca.table6, row.names = FALSE, file = "tm6.dat")
+
+mca.table7 <- table(candidates$GENDER, candidates$ACADEMIC.BACK., 
+                    candidates2$ELECTED)
+mca.table7 <- as.data.frame(mca.table7)
+colnames(mca.table7) <- c("Gender", "Education", "Elected", "Freq")
+write.table(mca.table7, row.names = FALSE, file = "tm7.dat")
+
+mca.table8 <- table(candidates$CHAIRS, candidates$TV.EXPOSURE, 
+                    candidates2$ELECTED)
+mca.table8 <- as.data.frame(mca.table8)
+colnames(mca.table8) <- c("Chairs", "TV", "Elected", "Freq")
+write.table(mca.table8, row.names = FALSE, file = "tm8.dat")
+
+Jimage1 <- load.image("tm1.png")
+Jimage4 <- load.image("tm4.png")
+Jimage6 <- load.image("tm6.png")
+Jimage7 <- load.image("tm7.png")
+
+Jimage1 <- as.raster(Jimage1)
+Jimage4 <- as.raster(Jimage4)
+Jimage6 <- as.raster(Jimage6)
+Jimage7 <- as.raster(Jimage7)
+
+Jimages <- list(mca.table1 = Jimage1, mca.table4 = Jimage4, mca.table6 = Jimage6,
+                mca.table7 = Jimage7)
+
+Dtm1 <- c("First plot visualizes the relationships between the categories of TV Exposure, Social Media and Experience. A pattern is obvious that the same categories of these variables form some kind of teams. This means that candidates with large experience are the same persons that have large tv exposure and large political experience. The same can be concluded for the rest categories.")
+
+Dtm4 <- c("First conclusion that can be made is that most of the people that are candidates at smaller areas, work for the Health industry or at the Public service. On the other hand there are a lot of candidates in the mediocre areas that work as lawyers and usually make it to the parliament. Lastly most of the Academics are related to the candidates that are not elected.")
+
+Dtm6 <- c("Main conclusion from this joint category plot is that Engineers, Scientists and Journalists are related with the candidates that get elected.")
+
+Dtm7 <- c("In this joint plot, the categories of Gender, Academic Background and Elected are visualized. Main conclusion is first of all that having a master is unimportant since it on the origin of the plot(0,0). On the other hand it seems that having a Bachelor is more related to those who don't make it to the parliament while having a PhD is more related to those who get elected")
+
+Dtm <- list(mca.table1 = Dtm1, mca.table4 = Dtm4, mca.table6 = Dtm6, 
+            mca.table7 = Dtm7)
+
+```
+
+# Save every dataset
+```{r, echo=FALSE}
+
+plotit <- function(x, y, z){
+    
+    pie(x, main = z, labels = y, cex = 1, col = colorlist1) #Pie with percentages of every profession.
+    legend("topright", names(x), cex = 1, fill = colorlist1)
+}
+
+all.tables <- list(AGE = table.age, PROFESSION = table.professions, 
+                   ACADEMIC.BACK. = table.education,
+                   TV.EXPOSURE = table.tv, EXPERIENCE = table.experience,
+                   SOCIAL.MEDIA = table.socialmedia, CHAIRS = table.chairs,
+                   SECTOR = table.sector, GENDER = table.gender, 
+                   STATUS = table.status,
+                   KIDS = table.kids, PR.ELECTED = table.prElected, 
+                   ELECTED = table.elected)
+
+all.l <- list(AGE = lage, PROFESSION = lprof, ACADEMIC.BACK. = lba, TV.EXPOSURE = ltv,
+              EXPERIENCE = le, SOCIAL.MEDIA = lsm, CHAIRS = lchairs, SECTOR = lsec,
+              GENDER = lg, STATUS = ls, KIDS = lk, PR.ELECTED = lpr, ELECTED = ly)
+
+all.main <- list(AGE = "Pie chart of Age categories",
+                 PROFESSION = "Pie chart of Professions", 
+                 ACADEMIC.BACK. = "Pie chart of Academic Background", 
+                 TV.EXPOSURE = "Pie chart of TV Exposure",
+                 EXPERIENCE = "Pie chart of Political Experience", 
+                 SOCIAL.MEDIA = "Pie chart of Social Media", 
+                 CHAIRS = "Pie chart of Election Areas", 
+                 SECTOR = "Pie chart of Working Sector",
+                 GENDER = "Pie chart of Gender", 
+                 STATUS = "Pie chart of Marital Status", 
+                 KIDS = "Pie chart of having kids", 
+                 PR.ELECTED = "Pie chart of Previously elected", 
+                 ELECTED ="Pie chart of Elected")
+
+
+
+
+library(imager)
+
+
+image1 <- load.image("log.reg2.png")
+image2 <- load.image("log.regF2.png")
+image3 <- load.image("intlog2.png")
+image1 <- as.raster(image1)
+image2 <- as.raster(image2)
+image3 <- as.raster(image3)
+
+
+images <- list(log.reg2 = image1, log.regF2 = image2, intlog2 = image3)
+```
+
+```{r, echo=FALSE}
+
+Dage <- c("Age is a categorical variable with 5 different levels. Its level is represented by an interval of size 10. The younger candidates are included in the first category, 30-40 while the oldest are included in the 70-80 category. 65% of the candidates are between the middle categories, 40-50 and 50-60. The smallest age group is the oldest since there are only 12 people.")
+
+Dprof <- c("Profession is a categorical variables of 9 different levels. Every level represents a group that includes jobs that are relevant with the main field. For example Health includes Doctors, Nurses and Vets. It seems that profession follows a normal distribution since people are almost spread equally to its category. The largest one is Law, while there are 102. On the contrary the smallest represantation belongs to Scientists(3%)")
+
+Dedu <- c("Academic Background stands for the education level complete of every candidate. Almost 98% of the candidates have a tertiary education, while only 9 persons don't")
+
+Dtv <- c("Tv exposure refers to the amount of times candidates have appeared on national or local channels. 25% of the candidates have never been on television, while 44% have only appeared in small local channels. On the other hand 31% of the candidates have attended national tv channels and almost 16% of them appear on daily basis")
+
+Dexp <- c("Political Experience, is a categorical variable that refers to the level that candidates have been involved with politics the previous years. The pie and table suggests that 33.5% of the candidates have never been involved with any kind of politics, while 37% of them have been involved with mucipal or regional politics. Almost 15% has been elected once in the parliament, while 14% have been elected multiple times or have been ministers in the past.")
+
+Dsm <- c("Social media is a categorial variable that represents the amount of followers that a candidate has in his Facebook page. Only 12% of the candidates have no Facebook page or they have less than 500 followers. Also candidates whose followers range from 501-2500 are 42%. On the other hand 31% of candidates have 2.501-7.000 followers while the rest 15% have more than 7.000")
+
+Dchairs <- c("The variable chairs represent the number of candidates that can be elected per area. It is divided in 3 areas. 175 candidates run for areas that can elect from 1 to 4 people. 32% run for areas tha elect 5-9 persons while the rest represent areas that can elect more than 10 candidates.")
+
+Dsector <- c("61% of the candidates have mainly worked in the private sector while the remaining 39% were occupied in the public sector.")
+
+Dg <- c("59% Of the candidates are male while 41% are women.")
+
+Dst <- c("The majority of the candidates are married(77%) while 22% are single, divorced or widowed.")
+
+Dkids <- c("Also the majority of the candidates have family with kids(72%) while 26% don't")
+
+Dprev <- c("This pie chart suggests that 72% of the candidates are new to politics or they have never been elected, while 28% have been elected in the past")
+
+De <- c("On the elections of July 7th, New Democracy elected 153 candidates, plus 5 from the ")
+
+NDdescriptives <- list(AGE = Dage, PROFESSION = Dprof, ACADEMIC.BACK. = Dedu,
+                       TV.EXPOSURE = Dtv, EXPERIENCE = Dexp, SOCIAL.MEDIA = Dsm,
+                      CHAIRS = Dchairs, SECTOR = Dsector, GENDER = Dg, STATUS = Dst,
+                      KIDS = Dkids, PR.ELECTED = Dprev, ELECTED = De)
+
+
+Dmod1 <- c("That model represents every category of every variable as a seperate variable. In simple words it can suggest which category of every variable is statistically significant or not. In this case, beeing a male, having previously elected, having a mediocre or a large influence on social media, having kids and a family history, seems to provide a significant advantage.")
+
+Dmod2 <- c("The current model evaluates every variable and it is concluded that profession, academic background, previously elected, social media, gender, kids and the area explain significantly the phenomenon of election.")
+
+ModelDescriptions <- c(log.regF2 = Dmod2, log.reg2 = Dmod1)
+```
+
+# Gender and followers
+```{r, echo=FALSE}
+Fnd <- candidates[which(candidates$GENDER == "Female"),]
+Mnd <- candidates[which(candidates$GENDER == "Male"),]
+
+density.f <- ggdensity(Fnd, x = "LIKES", 
+                       fill = "CHAIRS", palette = "jco")
+# Draw the summary table of Sepal.Length
+#::::::::::::::::::::::::::::::::::::::
+# Compute descriptive statistics by groups
+stableF <- desc_statby(Fnd, measure.var = "LIKES",
+                      grps = "CHAIRS")
+stableF <- stableF[, c("CHAIRS", "length", "mean", "sd")]
+# Summary table plot, medium orange theme
+stable.F1 <- ggtexttable(stableF, rows = NULL, 
+                        theme = ttheme("mBlue"))
+
+density.m <- ggdensity(Mnd, x = "LIKES", 
+                       fill = "CHAIRS", palette = "jco")
+# Draw the summary table of Sepal.Length
+#::::::::::::::::::::::::::::::::::::::
+# Compute descriptive statistics by groups
+stableM <- desc_statby(Mnd, measure.var = "LIKES",
+                      grps = "CHAIRS")
+stableM <- stableM[, c("CHAIRS", "length", "mean", "sd")]
+# Summary table plot, medium orange theme
+stable.M1 <- ggtexttable(stableM, rows = NULL, 
+                        theme = ttheme("mOrange"))
+# Arrange the plots on the same page
+ggarrange(density.f, stable.F1, density.m, stable.M1)
+
+FMimage <- load.image("GenderPlot.png")
+FMimage <- as.raster(FMimage)
+
+my_env = new.env(hash = TRUE, parent = .GlobalEnv)
+saveRDS(my_env, "GreekElections.RData")
+```

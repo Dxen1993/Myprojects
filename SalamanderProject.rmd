@@ -1,0 +1,451 @@
+---
+title: "Salamander Project"
+author: "Moumen Kamnaksh"
+date: "11/27/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Part 1
+
+### Libraries
+```{r, warning=FALSE,message=FALSE}
+rm(list = ls())
+
+# Loading all the necessary packages needed for the analyses
+
+library(readxl)
+library(lme4)
+library(lmerTest)
+library(merTools)
+library(ggplot2)
+library(tidyverse)
+library(knitr)
+library(ggpubr)
+library(factoextra)
+library(FactoMineR)
+library(formatR)
+```
+
+### Read Data
+```{r}
+
+#Reading the dataset salamanderHabitat.csv which will be used 
+#for the first two questions of the project
+
+habitat_data <- read.table(file = "salamanderHabitat.csv", header = TRUE, 
+                             stringsAsFactors = TRUE, sep = ",")
+
+#Providing a summary of the dataset where minimum, the maximum, 
+#the mean, the median and the amount of missing values 
+#for each variable is presented
+
+summary(habitat_data)
+
+```
+
+### Mixed effects model using each habitat variable separately
+```{r}
+#Fitting 4 separate models for each habitat variable. Year and Month are included 
+#as fixed effects while Boardcode is set as random. We use function lmer() from package lme4 
+#since all response variables are continuous. The summary functions provides information 
+#about the restricted maximum likelihood convergence criterion, a summary of the scaled residuals, 
+#the standard deviation and variance of the random effects (Boardcode and error terms) 
+#and the coefficients of the fixed effects, their standard error, the degrees of freedom 
+#and t-value from t-test.By loading package lmerTest 
+#we also obtain the p-values of the fixed effects in the summary of the model. 
+#Lastly the correlation of the fixed effects is measured. 
+
+# Mixed effects model with SoilTemp as response variable
+
+model1 <- lmer(SoilTemp ~ Year + Month + (1|BoardCode),
+     data = habitat_data)
+summary(model1)
+
+#Mixed effects model with SoilMoisture as response variable
+
+model2 <- lmer(SoilMoisture ~ Year + Month + (1|BoardCode),
+     data = habitat_data)
+summary(model2)
+
+#Mixed effects model with CanopyCover as response variable
+
+model3 <-  lmer(CanopyCover ~ Year + Month + (1|BoardCode),
+     data = habitat_data)
+summary(model3)
+
+#Mixed effects model with LeafLitterDepth as response variable
+
+model4 <- lmer(LeafLitterDepth ~ Year + Month + (1|BoardCode),
+     data = habitat_data)
+summary(model4)
+```
+
+### Visualizing the patterns between Month and the habitat variables
+```{r}
+#Remove missing values
+
+habitat_data2 <- na.omit(habitat_data)
+
+#Scatterplots showing the linear relationship between the dependent variable Month 
+#and the response variables. Since the relationship between the fixed effect 
+#and the response variable is linear we use geom_smooth() with method = lm. 
+#We create four different ggplots where in the x axis the four months are presented 
+#while on y axis we have continuous values of the habitat conditions. 
+
+ggm1 <- ggplot(habitat_data2, aes(x = Month, y = SoilTemp)) + geom_point() + 
+  geom_smooth(method = "lm")
+
+ggm2 <- ggplot(habitat_data2, aes(x = Month, y = SoilMoisture)) + geom_point() + 
+  geom_smooth(method = "lm")
+
+ggm3 <- ggplot(habitat_data2, aes(x = Month, y = CanopyCover)) + geom_point() + 
+  geom_smooth(method = "lm")
+
+ggm4 <- ggplot(habitat_data2, aes(x = Month, y = LeafLitterDepth)) + geom_point() + 
+  geom_smooth(method = "lm")
+
+#With ggarrange() we gather all four plots in one panel
+
+ggarrange(ggm1,ggm2,ggm3,ggm4)
+```
+
+### Visualizing the patterns between Year and the habitat variables
+```{r}
+#Scatterplots showing the linear relationship between the dependent variable Month 
+#and the response variables. 
+#We follow the same procedure as before with the only change in this case 
+#in the x axis the two years 2018 and 2019 appear.
+
+ggy1 <- ggplot(habitat_data2, aes(x = Year, y = SoilTemp)) + geom_point() + 
+  geom_smooth(method = "lm")
+
+ggy2 <- ggplot(habitat_data2, aes(x = Year, y = SoilMoisture)) + geom_point() + 
+  geom_smooth(method = "lm")
+
+ggy3 <- ggplot(habitat_data2, aes(x = Year, y = CanopyCover)) + geom_point() + 
+  geom_smooth(method = "lm")
+
+ggy4 <- ggplot(habitat_data2, aes(x = Year, y = LeafLitterDepth)) + geom_point() + 
+  geom_smooth(method = "lm")
+
+ggarrange(ggy1,ggy2,ggy3,ggy4)
+```
+
+#Part 2
+
+### Generalized linear mixed effects model
+```{r}
+#We turn the variable Occupied into factor. It is a step that is required 
+#since this variable is a binary one and not a numerical continuous variable. 
+
+habitat_data$Occupied <- as.factor(habitat_data$Occupied)
+
+#We fit a generalized linear mixed effects model since our response variable is binary. 
+#We set the error distribution (family = binomial). 
+#In this model SoilTemp and SoilMoisture are used as independent fixed effects while BoardCode is set as random once more. 
+#The only difference with the output of an lmer() is that instead of the REML convergence criterion 
+#we get information about the Akaike Information and the Bayesian Information criteria, 
+#along with the log-likelihood and the deviance of the model. 
+#The other difference is that instead of t-value for the fixed effects we get a z value. 
+#Z value describes the position of a raw score 
+#in terms of its distance from the Mean when measured in Standard deviation.
+
+gm1 <- glmer(Occupied ~ SoilTemp + SoilMoisture + (1|BoardCode),
+             data = habitat_data, family = binomial)
+summary(gm1)
+```
+
+### Boxplots
+```{r}
+
+#Using SoilMoisture as a variable. Occupied is a binary variable, #therefore the two groups have to be visualized separately. 
+#Boxplots can show the trends of the groups along with the variance, the mean and possible outliers.
+#Therefore in x axis the two values of Occupied appear and on y axis the values of SoilMoisture are presented. 
+#Two separate blue boxes appear on the final panel. 
+
+b1 <- boxplot(SoilMoisture ~ Occupied, data = habitat_data2,
+        main = "Categorized by Occupation",
+        xlab = "Occupied",
+        ylab = "SoilMoisture",
+        col = "blue")
+
+#Using Soiltemp as a variable. The same comments hold here as well. #The difference is that in this case on y axis, the values of the SoilTemp appear.
+#Additionally, the two boxes are orange and not blue.
+
+b2 <- boxplot(SoilTemp ~ Occupied, data = habitat_data2,
+        main = "Categorized by Occupation",
+        xlab = "Occupied",
+        ylab = "SoilTemp",
+        col = "orange")
+
+#We gather the two boxplots in one panel
+
+ggarrange(b1,b2)
+```
+
+### Table of aproximate range of suitable habitat conditions
+```{r}
+#Creating a dataset that has only the boards that are occupied
+
+new_data <- habitat_data[which(habitat_data$Occupied == 1),]
+
+#Creating a dataset that has only the boards that are not occupied
+
+new_data2 <- habitat_data[which(habitat_data$Occupied == 0),]
+
+#Removing the missing values from the dataset with no occupied boards
+
+new_data2 <- na.omit(new_data2)
+
+#Calculating the min, max, mean and standard deviation of Soiltemp #for boards that are occupied
+
+st <- c(min(new_data$SoilTemp), max(new_data$SoilTemp), mean(new_data$SoilTemp),
+        sd(new_data$SoilTemp))
+
+#Calculating the min, max, mean and standard deviation of SoilMoisture 
+#for boards that are occupied
+
+sm <- c(min(new_data$SoilMoisture), max(new_data$SoilMoisture),     
+        mean(new_data$SoilMoisture), sd(new_data$SoilMoisture))
+
+#Combining these 8 values, each 4 in a separate column
+
+t1 <- cbind(st,sm)
+
+#Turning this vector into a data frame
+
+t1 <- as.data.frame(t1)
+
+#Naming the rows of the data frame 
+
+row.names(t1) <- c("min", "max", "mean", "sd")
+
+#Printing a table with all the information
+
+kable(t1, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("SoilTemperature", "SoilMosture"),
+      caption = "Range of suitable habitat conditions")
+
+# We repeat the exact same procedure for the SoilMoisture variable 
+
+st <- c(min(new_data2$SoilTemp), max(new_data2$SoilTemp), mean(new_data2$SoilTemp),
+        sd(new_data2$SoilTemp))
+sm <- c(min(new_data2$SoilMoisture), max(new_data2$SoilMoisture), 
+        mean(new_data2$SoilMoisture), sd(new_data2$SoilMoisture))
+t1 <- cbind(st,sm)
+t1 <- as.data.frame(t1)
+row.names(t1) <- c("min", "max", "mean", "sd")
+
+kable(t1, digits = 10, format.args = list(scientific = -1), 
+      col.names = c("SoilTemperature", "SoilMosture"),
+      caption = "Range of unsuitable habitat conditions")
+
+#Calculating the t-test to validate if there is a statistical significant difference 
+#between the means of the two groups of Occupation for habitat variables, Soil Moisture 
+#and SoilTemp, CanopyCover and LeadLitterDepth.
+
+t.test(new_data2$SoilTemp, new_data$SoilTemp)
+t.test(new_data$SoilMoisture, new_data2$SoilMoisture)
+t.test(new_data2$CanopyCover, new_data$CanopyCover)
+t.test(new_data2$LeafLitterDepth, new_data$LeafLitterDepth)
+```
+
+#Part 3
+
+### Reading the pond data
+```{r}
+#Reading the data from the .csv format.
+#Since the data are in our current working directory we only have to specify the name of the file.
+#We use header = TRUE to specify that the first row contains the column names.
+pond_data <- read.csv("salamanderPonds.csv", header = TRUE)
+
+#Selecting variables of interest by using the function select().
+#By using the function mutate(), we change the class of the variables PondType and Presence to factor.
+pond_data <- pond_data %>%
+  select(PondType, Presence, PondSurfaceArea, PondMaxDepth,
+         Proximity_to_Forest, CanopyCover, 
+         PredPresence, Crayfish, AquaticVeg,
+         Substrate, Noon_corrected_Temp) %>%
+  mutate(PondType = as.factor(PondType)) %>%
+  mutate(Presence = as.factor(Presence))
+
+#Finally, we change the levels of the Presence variable, from (0,1) to (Not present, Present)
+levels(pond_data$Presence) <- c("Not present", "Present")
+```
+
+### PCA
+```{r}
+#Using prcomp(), we apply PCA using the recomended variables.
+#By using scale. = TRUE and center = TRUE we standardize our data prior to PCA.
+#This is especially usefull when we have numerical variables that are measured in different scales.
+#Like PondSurfaceArea and PondMaxDepth.
+#The standardized data have zero mean and standard deviation equal to one.
+pond_pca <- prcomp(pond_data %>%
+                     select(c(-PondType, -Presence)), scale. = TRUE, center = TRUE)
+
+#Scree plot
+#The first three components (dimensions) explain the largest percentage of the total variation
+# PCA1 : ~31% VAF
+# PCA2 : ~19% VAF
+# PCA3 : ~17% VAF
+fviz_eig(pond_pca, addlabels = TRUE)
+
+#Extract the corresponding eigenvalues
+#The first three PCs explain 66,5% of the total variation
+get_eigenvalue(pond_pca)
+
+#Individual similarity.
+#Shows the individuals plotted against the first two dimensions.
+#Similar individuals appear closer together.
+#Individuals are coloured base on the quality of representation (cos2)
+fviz_pca_ind(pond_pca,
+             geom = "point",
+             pointsize = 5,
+             gradient.cols = c("white", "red", "blue"),
+             col.ind = "cos2",
+             repel = TRUE)
+```
+
+### Interpreting the first dimension
+```{r}
+##The following visualizations are going to help us identify any underlying patterns,
+##as well as provide an interpratation for the first two principal components
+
+#Plot the contributions of variables to the first dimension (axis = 1)
+fviz_contrib(pond_pca, choice = "var", axes = 1, top = 10)
+
+#Plot the contributions of variables to the second dimension (axis = 2)
+fviz_contrib(pond_pca, choice = "var", axes = 2, top = 10)
+
+#Biplot of individuals and variables
+#Use repel = TRUE to avoid text overlap
+fviz_pca_biplot(pond_pca, repel = TRUE)
+```
+
+### Investigate differences between pond types 
+```{r}
+##The two following biplots are going to help us identify any underlying patterns 
+##with respect to Pond Type and Presence variables. 
+
+#Create a biplot, where individuals are coloured by Pond Type
+fviz_pca_biplot(pond_pca, 
+                col.ind = pond_data$PondType, palette = "jco", 
+                addEllipses = TRUE, label = "var",
+                col.var = "black", repel = TRUE,
+                legend.title = "Pond Type") 
+
+#Create a biplot, where individuals are coloured by Presence
+fviz_pca_biplot(pond_pca, 
+                col.ind = pond_data$Presence, palette = "jco", 
+                addEllipses = TRUE, label = "var",
+                col.var = "black", repel = TRUE,
+                legend.title = "Larvae Presence")
+```
+
+### Boxplots
+```{r}
+#Extract the first principal component 
+PC1 <- pond_pca$x[, 1]
+
+#Create boxplots
+par(mfrow = c(1,2))
+#Using Pond Type as a variable
+boxplot(PC1 ~ pond_data$PondType,
+        main = "Categorized by pond type",
+        xlab = "Pond Type",
+        ylab = "First proncipal component",
+        col = "blue")
+
+#Using Presence as a variable
+boxplot(PC1 ~ pond_data$Presence,
+        main = "Categorized by larvae presence",
+        xlab = "Presence",
+        ylab = "First proncipal component",
+        col = "orange")
+```
+
+### Checking the assumption of normality
+```{r}
+#Before conducting a statistical test we will check the following assumptions:
+# - Assumption of Normaliry
+# - Assumption of equal variances
+# If these assumptions are met, we can conduct a two samples t-test
+# Otherwise a non-parametric test will be considered
+
+#Adding PC1 as a variable in our dataset and grouping by pond type
+pond_data <- pond_data %>%
+mutate(PC1 = PC1) %>%
+group_by(PondType)
+
+#We have 4 groups for which we want to conduct statistical tests.
+#Constructed vs Natural and Present vs Not present.
+#PC1 values for Constructed ponds
+PC1_Constr <- pond_data$PC1[pond_data$PondType == "Constructed"]
+#PC1 values for Natural ponds
+PC1_Natur <- pond_data$PC1[pond_data$PondType == "Natural"]
+#PC1 values for ponds with larvae
+PC1_Pres <- pond_data$PC1[pond_data$Presence == "Present"]
+#PC1 values for ponds without larvae
+PC1_Notpr <- pond_data$PC1[pond_data$Presence == "Not present"]
+
+#Check assumption of normality
+#A two-sample t-test assumes normal distributions in groups
+#Plot the distributions
+par(mfrow = c(2,2))
+#Density Histogram
+hist(PC1_Constr,
+     breaks = 10, col = "blue", main = "Constructed Ponds",
+     xlab = "PC1 loadings", freq = FALSE)
+#Add a density line
+lines(density(PC1_Constr),
+      col = "red")
+
+hist(PC1_Natur,
+     breaks = 10, col = "blue", main = "Natural Ponds",
+     xlab = "PC1 loadings", freq = FALSE)
+lines(density(PC1_Natur),
+      col = "red")
+
+hist(PC1_Notpr,
+     breaks = 10, col = "orange", main = "Larvae not present",
+     xlab = "PC1 loadings", freq = FALSE)
+lines(density(PC1_Notpr),
+      col = "red")
+
+hist(PC1_Pres,
+     breaks = 10, col = "orange", main = "Larvae present",
+     xlab = "PC1 loadings", freq = FALSE)
+lines(density(PC1_Pres),
+      col = "red")
+```
+
+### Shapiro-Wilk normality tests
+```{r}
+#p-values are above 0.05, therefore the null hypothesis cant be rejected
+#We can assume that the four groups are normally distributed.
+shapiro.test(PC1_Constr)
+shapiro.test(PC1_Natur)
+shapiro.test(PC1_Notpr)
+shapiro.test(PC1_Pres)
+```
+
+### Checking the assumption of equal variances (F-test)
+```{r}
+#Test for equal variances
+#p-values are above 0.05, therefore we can assume approximately equal variances
+var.test(PC1 ~ PondType, data = pond_data)
+var.test(PC1 ~ Presence, data = pond_data)
+```
+
+### Two sample t-tests
+```{r}
+#p-values < 0.001
+#Reject the null hypothesis that group means are equal.
+t.test(PC1_Constr, PC1_Natur, var.equal = TRUE)
+t.test(PC1_Notpr, PC1_Pres, var.equal = TRUE)
+```
+
